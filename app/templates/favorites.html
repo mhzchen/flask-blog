@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}我的收藏 - RUNOOB 博客{% endblock %}
+
+{% block content %}
+<h2 class="section-title">我的收藏</h2>
+
+{% if posts %}
+<div class="article-grid">
+    {% for post in posts %}
+        <a href="{{ url_for('posts.post_detail', post_id=post.id) }}" class="card-link">
+            <div class="article-card">
+                <div class="card-content">
+                    <span class="card-category">{{ post.category.name }}</span>
+                    <h3>{{ post.title }}</h3>
+                    <p>{{ post.summary|truncate(80) }}</p>
+                    <span class="card-date">{{ post.created_at.strftime('%Y-%m-%d') }}</span>
+                </div>
+            </div>
+        </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="empty-tip">你还没有收藏任何文章。</p>
+{% endif %}
+{% endblock %}

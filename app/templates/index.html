@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}RUNOOB 博客 - 首页{% endblock %}
+
+{% block content %}
+<h2 class="section-title">最新文章</h2>
+
+<!-- 搜索框 -->
+<div class="search-bar">
+    <form method="get" action="{{ url_for('main.index') }}">
+        <input type="text" name="q" value="{{ keyword }}"
+               placeholder="搜索文章标题或摘要..." class="search-input">
+        {% if keyword %}
+            <a href="{{ url_for('main.index', category=category_slug) }}" class="clear-btn">✕</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- 分类筛选 -->
+<div class="category-bar">
+    <a href="{{ url_for('main.index', q=keyword) }}"
+       class="{% if not category_slug %}active{% endif %}">全部</a>
+    {% for cat in categories %}
+        <a href="{{ url_for('main.index', category=cat.slug, q=keyword) }}"
+           class="{% if category_slug == cat.slug %}active{% endif %}">
+            {{ cat.name }}
+        </a>
+    {% endfor %}
+</div>
+
+<p class="result-info">
+    共 {{ pagination.total }} 篇文章
+    {% if keyword %}，搜索「{{ keyword }}」{% endif %}
+</p>
+
+{% if posts %}
+<div class="article-grid">
+    {% for post in posts %}
+        <a href="{{ url_for('posts.post_detail', post_id=post.id) }}" class="card-link">
+            <div class="article-card">
+                <div class="card-content">
+                    <span class="card-category">{{ post.category.name }}</span>
+                    <h3>{{ post.title }}</h3>
+                    <p>{{ post.summary|truncate(80) }}</p>
+                    <span class="card-date">{{ post.created_at.strftime('%Y-%m-%d') }}</span>
+                </div>
+            </div>
+        </a>
+    {% endfor %}
+</div>
+
+<!-- 分页导航 -->
+{% if pagination.pages > 1 %}
+<div class="pagination">
+    {% if pagination.has_prev %}
+        <a href="{{ url_for('main.index', page=pagination.prev_num, category=category_slug, q=keyword) }}">← 上一页</a>
+    {% endif %}
+    {% for page_num in range(1, pagination.pages + 1) %}
+        {% if page_num == pagination.page %}
+            <span class="current">{{ page_num }}</span>
+        {% else %}
+            <a href="{{ url_for('main.index', page=page_num, category=category_slug, q=keyword) }}">{{ page_num }}</a>
+        {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+        <a href="{{ url_for('main.index', page=pagination.next_num, category=category_slug, q=keyword) }}">下一页 →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<p class="empty-tip">没有找到匹配的文章。</p>
+{% endif %}
+{% endblock %}
