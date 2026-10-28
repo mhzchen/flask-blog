@@ -63,6 +63,7 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
 
     def set_password(self, password):
         """对密码进行哈希加密（永远不存明文密码）"""
@@ -73,7 +74,7 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        return {'id': self.id, 'username': self.username, 'email': self.email}
+        return {'id': self.id, 'username': self.username, 'email': self.email, 'is_admin': self.is_admin}
 
     def __repr__(self):
         return f'<User {self.username}>'

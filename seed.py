@@ -16,7 +16,7 @@ with app.app_context():
     db.create_all()
 
     # 1. 创建用户（密码：123456）
-    admin = User(username='runoob', email='admin@runoob.com')
+    admin = User(username='runoob', email='admin@runoob.com', is_admin=True)
     admin.set_password('123456')
     db.session.add(admin)
 

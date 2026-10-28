@@ -5,6 +5,7 @@
       <router-link to="/">首页</router-link>
       <template v-if="auth.isAuthenticated">
         <span class="user-name">{{ auth.user?.username }}</span>
+        <router-link v-if="auth.user?.is_admin" to="/admin">后台管理</router-link>
         <router-link to="/favorites">我的收藏</router-link>
         <a href="#" @click.prevent="handleLogout">登出</a>
       </template>

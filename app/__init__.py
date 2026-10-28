@@ -26,10 +26,12 @@ def create_app(config_class=Config):
     from app.api.posts import posts_bp
     from app.api.categories import categories_bp
     from app.api.favorites import favorites_bp
+    from app.api.admin import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(posts_bp, url_prefix='/api/posts')
     app.register_blueprint(categories_bp, url_prefix='/api/categories')
     app.register_blueprint(favorites_bp, url_prefix='/api/favorites')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
     return app

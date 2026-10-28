@@ -20,7 +20,8 @@ flask-blog/
 │       ├── auth.py          # 注册、登录、当前用户（JWT）
 │       ├── posts.py         # 文章列表(搜索/分类/分页)、详情
 │       ├── categories.py    # 分类列表
-│       └── favorites.py     # 收藏列表、切换收藏、检查收藏状态
+│       ├── favorites.py     # 收藏列表、切换收藏、检查收藏状态
+│       └── admin.py         # 后台：文章/分类增删改查（需管理员）
 ├── frontend/                # Vue3 前端（Vite）
 │   ├── src/
 │   │   ├── api/index.js     # Axios 实例（token 拦截器 + 401 跳转）
