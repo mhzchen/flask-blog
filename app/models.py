@@ -1,6 +1,5 @@
 from datetime import datetime
 
-from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
@@ -14,8 +13,10 @@ class Category(db.Model):
     name = db.Column(db.String(50), unique=True, nullable=False)
     slug = db.Column(db.String(50), unique=True, nullable=False)
 
-    # backref：在 Category 对象上可通过 .posts 反向获取其下所有文章
     posts = db.relationship('Post', backref='category', lazy='dynamic')
+
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name, 'slug': self.slug}
 
     def __repr__(self):
         return f'<Category {self.name}>'
@@ -31,16 +32,30 @@ class Post(db.Model):
     summary = db.Column(db.Text, default='')
     content = db.Column(db.Text, nullable=False)
 
-    # 外键：db.ForeignKey('表名.字段名')
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self, include_content=False):
+        """序列化为 JSON 字典。列表页可不返回正文以减小体积。"""
+        data = {
+            'id': self.id,
+            'title': self.title,
+            'slug': self.slug,
+            'summary': self.summary,
+            'category_id': self.category_id,
+            'category': self.category.name if self.category else None,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+        }
+        if include_content:
+            data['content'] = self.content
+        return data
 
     def __repr__(self):
         return f'<Post {self.title}>'
 
 
-class User(UserMixin, db.Model):
+class User(db.Model):
     """用户模型"""
     __tablename__ = 'users'
 
@@ -56,6 +71,9 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         """验证密码是否匹配"""
         return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {'id': self.id, 'username': self.username, 'email': self.email}
 
     def __repr__(self):
         return f'<User {self.username}>'
