@@ -4,3 +4,13 @@ Press CTRL+C to quit
  * Restarting with stat
  * Debugger is active!
  * Debugger PIN: 111-856-607
+127.0.0.1 - - [28/Oct/2026 15:42:23] "GET /api/categories HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:23] "GET /api/admin/posts HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:24] "GET /api/categories HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:24] "GET /api/admin/posts HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:24] "GET /api/categories HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:24] "GET /api/admin/posts HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:42] "GET /api/categories HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:42] "GET /api/admin/posts HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:44] "GET /api/categories HTTP/1.1" 200 -
+127.0.0.1 - - [28/Oct/2026 15:42:44] "GET /api/posts?page=1 HTTP/1.1" 200 -
