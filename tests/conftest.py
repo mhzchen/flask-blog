@@ -1,11 +1,8 @@
 """pytest 全局配置与测试夹具。
 
-测试使用内存版 SQLite（StaticPool 保证同库共享），与 MySQL 完全隔离，
-不会影响你本机的 flask_blog 数据库，也不会污染已有数据。
-
-关键点：app 夹具在 ``with app.app_context()`` 内部 yield，
-保证整个测试期间应用上下文始终打开，db.session 一直可用，
-这样各数据夹具创建的对象不会“脱离会话”，测试里也能直接读 category.id / post.id。
+测试使用内存版 SQLite（StaticPool 保证同库共享），与 MySQL 完全隔离。
+测试里禁用 Redis 缓存，并让 Celery 以 eager 模式同步执行，
+因此无需启动 Redis / Worker 也能跑通全部用例。
 """
 import pytest
 from sqlalchemy.pool import StaticPool
@@ -15,7 +12,7 @@ from app.models import User, Category, Post
 
 
 class TestConfig:
-    """测试专用配置：覆盖默认配置，改用内存 SQLite"""
+    """测试专用配置：覆盖默认配置，改用内存 SQLite，禁用缓存与异步 broker"""
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite://'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -27,6 +24,14 @@ class TestConfig:
     JWT_SECRET_KEY = 'test-jwt-secret-key-0123456789abcdef'
     JWT_ACCESS_TOKEN_EXPIRES = 3600
     CORS_ORIGINS = '*'
+
+    # 测试不需要 Redis：关掉缓存，Celery 走 eager 同步执行
+    CACHE_ENABLED = False
+    CACHE_REDIS_URL = 'redis://localhost:6379/0'
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
 
 
 @pytest.fixture()

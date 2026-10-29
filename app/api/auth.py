@@ -2,13 +2,14 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 from app.models import User, db
+from app.tasks import enqueue, send_welcome_email
 
 auth_bp = Blueprint('auth', __name__)
 
 
 @auth_bp.post('/register')
 def register():
-    """用户注册，成功后直接返回 token"""
+    """用户注册，成功后直接返回 token，并异步发送欢迎邮件"""
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     email = (data.get('email') or '').strip()
@@ -30,6 +31,9 @@ def register():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+
+    # 异步发送欢迎邮件（broker 不可用时不影响注册）
+    enqueue(send_welcome_email, user.id)
 
     token = create_access_token(identity=str(user.id))
     return jsonify({'access_token': token, 'user': user.to_dict()}), 201

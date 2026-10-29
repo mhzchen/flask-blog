@@ -4,6 +4,7 @@ from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from config import Config
+from app.celery_app import init_celery
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -20,6 +21,9 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     jwt.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
+
+    # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
+    init_celery(app)
 
     # 注册 API 蓝图（在 create_app 内部导入，避免循环导入）
     from app.api.auth import auth_bp

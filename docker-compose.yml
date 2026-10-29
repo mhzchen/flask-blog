@@ -14,7 +14,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    # 不把 3306 映射到宿主机，避免与本机 MySQL 冲突；如需从宿主机直连可改 3307:3306
+    ports:
+      - "3307:3306"
+    # 把容器内 MySQL 的 3306 映射到宿主机 3307，便于用 Navicat/Workbench 等图形工具连接：
+    #   连接地址 localhost:3307，账号 root / root，数据库 flask_blog
+    # 用 3307 而非 3306，避免与本机将来可能安装的 MySQL 冲突
+
+  redis:
+    image: redis:7-alpine
+    container_name: flaskblog-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # 缓存 db0，Celery broker/backend 用 db1
 
   backend:
     build: .
@@ -26,11 +44,55 @@ services:
       JWT_SECRET_KEY: change-me-in-production
       FLASK_ENV: production
       CORS_ORIGINS: http://localhost:8080
+      CACHE_ENABLED: "true"
+      CACHE_REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
+
+  worker:
+    build: .
+    container_name: flaskblog-worker
+    restart: unless-stopped
+    command: celery -A celery_worker.celery worker --loglevel=info
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
+      SECRET_KEY: dev-secret-key-change-me
+      JWT_SECRET_KEY: change-me-in-production
+      FLASK_ENV: production
+      CACHE_REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build: .
+    container_name: flaskblog-beat
+    restart: unless-stopped
+    command: celery -A celery_worker.celery beat --loglevel=info
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
+      SECRET_KEY: dev-secret-key-change-me
+      JWT_SECRET_KEY: change-me-in-production
+      FLASK_ENV: production
+      CACHE_REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
@@ -43,3 +105,4 @@ services:
 
 volumes:
   db_data:
+  redis_data:

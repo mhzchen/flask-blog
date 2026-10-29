@@ -9,7 +9,7 @@ WORKDIR /app
 
 # 先装依赖，利用 Docker 层缓存
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # 拷贝应用代码（.dockerignore 已排除 venv/.env/logs 等）
 COPY . .

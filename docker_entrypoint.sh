@@ -28,7 +28,8 @@ else:
 PY
 
 echo "==> 检查数据库是否为空 ..."
-python - <<'PY'
+# 用 if 承接退出码：数据库已有表时 python 返回 1，set -e 不会把整个脚本杀掉
+if python - <<'PY'
 import os, sys
 from sqlalchemy import create_engine, inspect
 url = os.environ["DATABASE_URL"]
@@ -36,7 +37,7 @@ engine = create_engine(url)
 tables = inspect(engine).get_table_names()
 sys.exit(0 if not tables else 1)
 PY
-if [ $? -eq 0 ]; then
+then
     echo "==> 首次启动，执行 seed.py 初始化数据库 ..."
     python seed.py
 else

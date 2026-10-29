@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models import User, Post, Category, db
+from app.cache import invalidate
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -32,7 +33,7 @@ def list_posts():
 @admin_bp.post('/posts')
 @admin_required
 def create_post():
-    """创建文章"""
+    """创建文章（失效文章列表缓存）"""
     data = request.get_json(silent=True) or {}
     title = (data.get('title') or '').strip()
     summary = (data.get('summary') or '').strip()
@@ -47,19 +48,20 @@ def create_post():
     if category is None:
         return jsonify({'error': '分类不存在。'}), 400
 
-    # 生成唯一 slug
     slug = _make_slug(title)
     post = Post(title=title, slug=slug, summary=summary, content=content,
                 category_id=category.id)
     db.session.add(post)
     db.session.commit()
+
+    invalidate('posts')
     return jsonify({'post': post.to_dict(include_content=True)}), 201
 
 
 @admin_bp.put('/posts/<int:post_id>')
 @admin_required
 def update_post(post_id):
-    """更新文章"""
+    """更新文章（失效文章列表缓存）"""
     post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
     data = request.get_json(silent=True) or {}
     title = (data.get('title') or '').strip()
@@ -80,16 +82,20 @@ def update_post(post_id):
     post.content = content
     post.category_id = category.id
     db.session.commit()
+
+    invalidate('posts')
     return jsonify({'post': post.to_dict(include_content=True)})
 
 
 @admin_bp.delete('/posts/<int:post_id>')
 @admin_required
 def delete_post(post_id):
-    """删除文章"""
+    """删除文章（失效文章列表缓存）"""
     post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
     db.session.delete(post)
     db.session.commit()
+
+    invalidate('posts')
     return jsonify({'message': '文章已删除。'})
 
 
@@ -98,7 +104,7 @@ def delete_post(post_id):
 @admin_bp.post('/categories')
 @admin_required
 def create_category():
-    """创建分类"""
+    """创建分类（失效分类缓存）"""
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     slug = (data.get('slug') or '').strip()
@@ -111,13 +117,15 @@ def create_category():
     cat = Category(name=name, slug=slug)
     db.session.add(cat)
     db.session.commit()
+
+    invalidate('categories')
     return jsonify({'category': cat.to_dict()}), 201
 
 
 @admin_bp.put('/categories/<int:cat_id>')
 @admin_required
 def update_category(cat_id):
-    """更新分类"""
+    """更新分类（失效分类缓存）"""
     cat = Category.query.get_or_404(cat_id)
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
@@ -128,16 +136,20 @@ def update_category(cat_id):
     if slug:
         cat.slug = slug
     db.session.commit()
+
+    invalidate('categories')
     return jsonify({'category': cat.to_dict()})
 
 
 @admin_bp.delete('/categories/<int:cat_id>')
 @admin_required
 def delete_category(cat_id):
-    """删除分类"""
+    """删除分类（失效分类缓存）"""
     cat = Category.query.get_or_404(cat_id)
     db.session.delete(cat)
     db.session.commit()
+
+    invalidate('categories')
     return jsonify({'message': '分类已删除。'})
 
 
