@@ -1,0 +1,12 @@
+# 排除不需要进入镜像的内容，加快构建并避免泄密
+.git
+.gitignore
+.idea
+venv
+__pycache__
+*.pyc
+instance
+.env
+*.log
+frontend
+node_modules

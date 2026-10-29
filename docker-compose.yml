@@ -1,0 +1,45 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: flaskblog-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: flask_blog
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # 不把 3306 映射到宿主机，避免与本机 MySQL 冲突；如需从宿主机直连可改 3307:3306
+
+  backend:
+    build: .
+    container_name: flaskblog-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
+      SECRET_KEY: dev-secret-key-change-me
+      JWT_SECRET_KEY: change-me-in-production
+      FLASK_ENV: production
+      CORS_ORIGINS: http://localhost:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: flaskblog-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  db_data:
