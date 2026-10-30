@@ -1,9 +1,11 @@
 #!/bin/sh
 # Flask 后端容器入口：
 #   1) 等待 MySQL 就绪
-#   2) 若数据库为空（无表）则执行 seed.py 建表 + 插入测试数据
+#   2) 用 Alembic (flask db) 管理表结构：
+#      - 全新数据库：flask db upgrade 建表 + seed 补数据
+#      - 已有表但无迁移记录：先 flask db stamp head 认领，再 upgrade
+#      - 已有迁移记录：直接 upgrade
 #   3) 启动 gunicorn
-# 说明：seed.py 内部会 drop_all()，所以只在“没有任何表”时执行，避免每次重启清空数据。
 set -e
 
 echo "==> 等待 MySQL 就绪 ..."
@@ -27,21 +29,31 @@ else:
     raise SystemExit("MySQL 在 60s 内未就绪")
 PY
 
-echo "==> 检查数据库是否为空 ..."
-# 用 if 承接退出码：数据库已有表时 python 返回 1，set -e 不会把整个脚本杀掉
-if python - <<'PY'
-import os, sys
+echo "==> 检查数据库表状态 ..."
+TABLES=$(python - <<'PY'
+import os
 from sqlalchemy import create_engine, inspect
 url = os.environ["DATABASE_URL"]
 engine = create_engine(url)
-tables = inspect(engine).get_table_names()
-sys.exit(0 if not tables else 1)
+print(','.join(inspect(engine).get_table_names()))
 PY
-then
-    echo "==> 首次启动，执行 seed.py 初始化数据库 ..."
+)
+
+if [ -z "$TABLES" ]; then
+    # 全新数据库：跑迁移建表，再插入测试数据
+    echo "==> 全新数据库，执行 flask db upgrade 建表 ..."
+    flask --app wsgi db upgrade
+    echo "==> 插入测试数据 ..."
     python seed.py
 else
-    echo "==> 数据库已有表，跳过 seed"
+    if echo "$TABLES" | grep -q "alembic_version"; then
+        echo "==> 数据库已有迁移记录，执行 flask db upgrade ..."
+        flask --app wsgi db upgrade
+    else
+        echo "==> 已有表但无迁移记录，标记为已迁移（stamp head）..."
+        flask --app wsgi db stamp head
+        flask --app wsgi db upgrade
+    fi
 fi
 
 echo "==> 启动 gunicorn (0.0.0.0:8000) ..."

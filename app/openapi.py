@@ -1,81 +1,33 @@
 """OpenAPI 3.0 接口文档规范 + Swagger UI 页面。
 
 - GET /openapi.json  -> 返回 OpenAPI 3.0 规范（Swagger UI 的数据源）
-- GET /swagger       -> Swagger UI 页面（在线渲染接口文档）
+- GET /swagger       -> Swagger UI 页面
+
+components.schemas 直接由 Pydantic 模型（app.schemas）自动生成：
+改模型即同步更新文档，避免手写 schema 与模型脱节。
 """
 from flask import jsonify
 
-# 数据模型（组件复用）
-SCHEMAS = {
-    "RegisterBody": {
-        "type": "object",
-        "required": ["username", "email", "password"],
-        "properties": {
-            "username": {"type": "string", "minLength": 1, "maxLength": 30, "description": "用户名"},
-            "email": {"type": "string", "format": "email", "description": "邮箱"},
-            "password": {"type": "string", "minLength": 6, "description": "密码，至少 6 位"},
-        },
-    },
-    "LoginBody": {
-        "type": "object",
-        "required": ["username", "password"],
-        "properties": {
-            "username": {"type": "string", "minLength": 1, "description": "用户名"},
-            "password": {"type": "string", "minLength": 1, "description": "密码"},
-        },
-    },
-    "PostBody": {
-        "type": "object",
-        "required": ["title", "category_id"],
-        "properties": {
-            "title": {"type": "string", "minLength": 1, "description": "文章标题"},
-            "summary": {"type": "string", "description": "摘要"},
-            "content": {"type": "string", "description": "正文"},
-            "category_id": {"type": "integer", "minimum": 1, "description": "分类 ID"},
-        },
-    },
-    "CategoryBody": {
-        "type": "object",
-        "required": ["name"],
-        "properties": {
-            "name": {"type": "string", "minLength": 1, "description": "分类名"},
-            "slug": {"type": "string", "description": "唯一标识，留空自动生成"},
-        },
-    },
-    "User": {
-        "type": "object",
-        "properties": {
-            "id": {"type": "integer"},
-            "username": {"type": "string"},
-            "email": {"type": "string", "format": "email"},
-            "is_admin": {"type": "boolean"},
-        },
-    },
-    "Post": {
-        "type": "object",
-        "properties": {
-            "id": {"type": "integer"},
-            "title": {"type": "string"},
-            "summary": {"type": "string"},
-            "content": {"type": "string"},
-            "category": {"type": "object"},
-            "created_at": {"type": "string", "format": "date-time"},
-        },
-    },
-    "Category": {
-        "type": "object",
-        "properties": {
-            "id": {"type": "integer"},
-            "name": {"type": "string"},
-            "slug": {"type": "string"},
-        },
-    },
+from app.schemas import RegisterBody, LoginBody, PostBody, CategoryBody
+
+# 参与自动生成 schema 的模型：名称 -> Pydantic 模型类
+_SCHEMA_MODELS = {
+    "RegisterBody": RegisterBody,
+    "LoginBody": LoginBody,
+    "PostBody": PostBody,
+    "CategoryBody": CategoryBody,
 }
 
+
+def _build_schemas():
+    """用 Pydantic 的 model_json_schema() 自动生成 OpenAPI components.schemas。"""
+    return {name: model.model_json_schema() for name, model in _SCHEMA_MODELS.items()}
+
+
 # 请求体辅助
-def _json_body(schema_name, required=True):
+def _json_body(schema_name):
     return {
-        "required": required,
+        "required": True,
         "content": {
             "application/json": {"schema": {"$ref": f"#/components/schemas/{schema_name}"}}
         },
@@ -197,13 +149,13 @@ PATHS = {
 
 
 def build_openapi_spec():
-    """构造 OpenAPI 3.0.3 规范。"""
+    """构造 OpenAPI 3.0.3 规范（schemas 由 Pydantic 自动生成）。"""
     return {
         "openapi": "3.0.3",
         "info": {
             "title": "Flask Blog API",
             "description": "Flask 博客系统 REST API 文档（Pydantic 校验 + JWT 认证 + Redis 缓存 + Celery 异步任务）。",
-            "version": "1.0.0",
+            "version": "1.1.0",
         },
         "servers": [{"url": "/"}],
         "tags": [
@@ -214,7 +166,7 @@ def build_openapi_spec():
         ],
         "paths": PATHS,
         "components": {
-            "schemas": SCHEMAS,
+            "schemas": _build_schemas(),
             "securitySchemes": {
                 "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
             },

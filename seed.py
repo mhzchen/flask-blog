@@ -1,19 +1,19 @@
-"""初始化数据库并插入测试数据。
+"""向数据库插入测试数据（建表由 Alembic 迁移负责）。
 
 用法：
-    python seed.py
+    1) 先执行迁移建表：flask --app wsgi db upgrade
+    2) 再执行本脚本补数据：python seed.py
+仅在数据库没有用户数据时执行，可重复运行。
 """
-from datetime import datetime
-
 from app import create_app, db
 from app.models import Category, Post, User
 
 app = create_app()
 
 with app.app_context():
-    # 清空已有数据（开发环境用）
-    db.drop_all()
-    db.create_all()
+    if User.query.count() > 0:
+        print('数据库已有数据，跳过 seed。')
+        raise SystemExit(0)
 
     # 1. 创建用户（密码：123456）
     admin = User(username='runoob', email='admin@runoob.com', is_admin=True)
