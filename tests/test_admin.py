@@ -80,3 +80,16 @@ def test_admin_delete_category(client, admin_headers, category):
     resp = client.delete(f'/api/admin/categories/{category.id}', headers=admin_headers)
     assert resp.status_code == 200
     assert resp.get_json()['message'] == '分类已删除。'
+# ---------- 阶段② 补充：覆盖率边界 ----------
+
+def test_admin_list_posts(client, app, admin_headers, post):
+    resp = client.get('/api/admin/posts', headers=admin_headers)
+    assert resp.status_code == 200
+    assert resp.get_json()['items'][0]['title'] == 'Hello Flask'
+
+
+def test_admin_update_post_bad_category(client, app, admin_headers, post):
+    resp = client.put(f'/api/admin/posts/{post.id}', headers=admin_headers, json={
+        'title': 'x', 'summary': '', 'content': 'c', 'category_id': 9999,
+    })
+    assert resp.status_code == 400

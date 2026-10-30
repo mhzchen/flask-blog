@@ -24,6 +24,6 @@ def register_error_handlers(app):
         app.logger.exception('未处理异常: %s', e)
         if app.debug:
             # 开发环境暴露细节方便排查
-            return jsonify({'error': '服务器内部错误', 'detail': str(e)}), 500
-        # 生产环境不泄露堆栈
-        return jsonify({'error': '服务器内部错误'}), 500
+            return jsonify({'error': '服务器内部错误', 'code': 500, 'detail': str(e)}), 500
+        # 生产环境不泄露堆栈；code 与 HTTPException 分支一致，前端可统一判断
+        return jsonify({'error': '服务器内部错误', 'code': 500}), 500
