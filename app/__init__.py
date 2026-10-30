@@ -5,6 +5,7 @@ from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from config import Config
 from app.celery_app import init_celery
+from app.openapi import register_openapi_routes
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -37,5 +38,8 @@ def create_app(config_class=Config):
     app.register_blueprint(categories_bp, url_prefix='/api/categories')
     app.register_blueprint(favorites_bp, url_prefix='/api/favorites')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+
+    # 注册 OpenAPI 规范与 Swagger UI 文档路由
+    register_openapi_routes(app)
 
     return app

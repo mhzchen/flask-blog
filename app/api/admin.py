@@ -1,9 +1,10 @@
 from functools import wraps
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models import User, Post, Category, db
 from app.cache import invalidate
+from app.schemas import PostBody, CategoryBody, validate_body
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -32,25 +33,17 @@ def list_posts():
 
 @admin_bp.post('/posts')
 @admin_required
+@validate_body(PostBody)
 def create_post():
-    """创建文章（失效文章列表缓存）"""
-    data = request.get_json(silent=True) or {}
-    title = (data.get('title') or '').strip()
-    summary = (data.get('summary') or '').strip()
-    content = data.get('content') or ''
-    category_id = data.get('category_id')
-
-    if not title:
-        return jsonify({'error': '标题不能为空。'}), 400
-    if not category_id:
-        return jsonify({'error': '请选择分类。'}), 400
-    category = db.session.get(Category, int(category_id))
+    """创建文章（请求体经 Pydantic 校验，创建后失效文章列表缓存）"""
+    body = g.validated
+    category = db.session.get(Category, int(body.category_id))
     if category is None:
         return jsonify({'error': '分类不存在。'}), 400
 
-    slug = _make_slug(title)
-    post = Post(title=title, slug=slug, summary=summary, content=content,
-                category_id=category.id)
+    slug = _make_slug(body.title)
+    post = Post(title=body.title, slug=slug, summary=body.summary,
+                content=body.content, category_id=category.id)
     db.session.add(post)
     db.session.commit()
 
@@ -60,26 +53,18 @@ def create_post():
 
 @admin_bp.put('/posts/<int:post_id>')
 @admin_required
+@validate_body(PostBody)
 def update_post(post_id):
-    """更新文章（失效文章列表缓存）"""
+    """更新文章（请求体经 Pydantic 校验，更新后失效文章列表缓存）"""
     post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
-    data = request.get_json(silent=True) or {}
-    title = (data.get('title') or '').strip()
-    summary = (data.get('summary') or '').strip()
-    content = data.get('content') or ''
-    category_id = data.get('category_id')
-
-    if not title:
-        return jsonify({'error': '标题不能为空。'}), 400
-    if not category_id:
-        return jsonify({'error': '请选择分类。'}), 400
-    category = db.session.get(Category, int(category_id))
+    body = g.validated
+    category = db.session.get(Category, int(body.category_id))
     if category is None:
         return jsonify({'error': '分类不存在。'}), 400
 
-    post.title = title
-    post.summary = summary
-    post.content = content
+    post.title = body.title
+    post.summary = body.summary
+    post.content = body.content
     post.category_id = category.id
     db.session.commit()
 
@@ -90,7 +75,7 @@ def update_post(post_id):
 @admin_bp.delete('/posts/<int:post_id>')
 @admin_required
 def delete_post(post_id):
-    """删除文章（失效文章列表缓存）"""
+    """删除文章（删除后失效文章列表缓存）"""
     post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
     db.session.delete(post)
     db.session.commit()
@@ -103,15 +88,12 @@ def delete_post(post_id):
 
 @admin_bp.post('/categories')
 @admin_required
+@validate_body(CategoryBody)
 def create_category():
-    """创建分类（失效分类缓存）"""
-    data = request.get_json(silent=True) or {}
-    name = (data.get('name') or '').strip()
-    slug = (data.get('slug') or '').strip()
-    if not name:
-        return jsonify({'error': '分类名不能为空。'}), 400
-    if not slug:
-        slug = _make_slug(name)
+    """创建分类（请求体经 Pydantic 校验，创建后失效分类缓存）"""
+    body = g.validated
+    name = body.name.strip()
+    slug = body.slug.strip() or _make_slug(name)
     if Category.query.filter_by(slug=slug).first():
         return jsonify({'error': 'slug 已存在。'}), 409
     cat = Category(name=name, slug=slug)
@@ -124,14 +106,13 @@ def create_category():
 
 @admin_bp.put('/categories/<int:cat_id>')
 @admin_required
+@validate_body(CategoryBody)
 def update_category(cat_id):
-    """更新分类（失效分类缓存）"""
+    """更新分类（请求体经 Pydantic 校验，更新后失效分类缓存）"""
     cat = Category.query.get_or_404(cat_id)
-    data = request.get_json(silent=True) or {}
-    name = (data.get('name') or '').strip()
-    slug = (data.get('slug') or '').strip()
-    if not name:
-        return jsonify({'error': '分类名不能为空。'}), 400
+    body = g.validated
+    name = body.name.strip()
+    slug = body.slug.strip()
     cat.name = name
     if slug:
         cat.slug = slug
@@ -144,7 +125,7 @@ def update_category(cat_id):
 @admin_bp.delete('/categories/<int:cat_id>')
 @admin_required
 def delete_category(cat_id):
-    """删除分类（失效分类缓存）"""
+    """删除分类（删除后失效分类缓存）"""
     cat = Category.query.get_or_404(cat_id)
     db.session.delete(cat)
     db.session.commit()

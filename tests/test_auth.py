@@ -18,13 +18,13 @@ def test_register_success(client, reg_payload):
 
 def test_register_missing_fields(client):
     resp = client.post('/api/auth/register', json={})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_register_short_password(client, reg_payload):
     reg_payload['password'] = '123'
     resp = client.post('/api/auth/register', json=reg_payload)
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_register_duplicate_username(client, reg_payload):

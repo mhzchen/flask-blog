@@ -1,27 +1,27 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 from app.models import User, db
 from app.tasks import enqueue, send_welcome_email
+from app.schemas import RegisterBody, LoginBody, validate_body
 
 auth_bp = Blueprint('auth', __name__)
 
 
 @auth_bp.post('/register')
+@validate_body(RegisterBody)
 def register():
-    """用户注册，成功后直接返回 token，并异步发送欢迎邮件"""
-    data = request.get_json(silent=True) or {}
-    username = (data.get('username') or '').strip()
-    email = (data.get('email') or '').strip()
-    password = data.get('password') or ''
+    """用户注册。
 
-    # 校验必填字段
-    if not username or not email or not password:
-        return jsonify({'error': '所有字段都必须填写。'}), 400
-    if len(password) < 6:
-        return jsonify({'error': '密码至少 6 位。'}), 400
+    请求体经 Pydantic 校验（用户名/邮箱/密码长度、邮箱格式），
+    校验通过后创建用户、返回 token，并异步发送欢迎邮件。
+    """
+    body = g.validated
+    username = body.username.strip()
+    email = body.email
+    password = body.password
 
-    # 检查用户名和邮箱是否已存在
+    # 业务校验：用户名/邮箱是否已存在
     if User.query.filter_by(username=username).first():
         return jsonify({'error': '用户名已被使用。'}), 409
     if User.query.filter_by(email=email).first():
@@ -40,14 +40,12 @@ def register():
 
 
 @auth_bp.post('/login')
+@validate_body(LoginBody)
 def login():
-    """用户登录，成功返回 token"""
-    data = request.get_json(silent=True) or {}
-    username = (data.get('username') or '').strip()
-    password = data.get('password') or ''
-
-    user = User.query.filter_by(username=username).first()
-    if user is None or not user.check_password(password):
+    """用户登录：用户名 + 密码，成功返回 token。"""
+    body = g.validated
+    user = User.query.filter_by(username=body.username.strip()).first()
+    if user is None or not user.check_password(body.password):
         return jsonify({'error': '用户名或密码错误。'}), 401
 
     token = create_access_token(identity=str(user.id))

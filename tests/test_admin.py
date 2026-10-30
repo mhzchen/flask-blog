@@ -29,7 +29,7 @@ def test_admin_create_post_missing_title(client, admin_headers, category):
     resp = client.post('/api/admin/posts', headers=admin_headers, json={
         'title': '', 'category_id': category.id,
     })
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_admin_create_post_bad_category(client, admin_headers):

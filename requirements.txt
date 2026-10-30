@@ -10,3 +10,5 @@ cryptography>=42.0
 redis>=5.0
 pytest>=8.0
 celery>=5.3
+pydantic>=2.7
+email-validator>=2.0
