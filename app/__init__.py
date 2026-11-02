@@ -2,7 +2,9 @@ import logging
 import time
 import uuid
 
-from flask import Flask, g, request
+from flask import Flask, g, request, jsonify
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -39,6 +41,9 @@ def create_app(config_class=Config):
     # 请求日志中间件（生成 request_id、记录耗时与状态）
     _register_request_logging(app)
 
+    # 慢查询日志：单条 SQL 超过阈值自动记录 WARNING
+    _register_slow_query_logging(app)
+
     # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
     init_celery(app)
 
@@ -64,7 +69,23 @@ def create_app(config_class=Config):
 
     @app.get('/health')
     def health():
+        """存活探针：进程活着即返回 ok（不含依赖检查，供负载均衡初判）。"""
         return {'status': 'ok'}
+
+    @app.get('/healthz')
+    def healthz():
+        """就绪探针：检查数据库连通性，供 Docker/K8s 判断是否可承接流量。"""
+        checks = {}
+        ok = True
+        # 数据库检查
+        try:
+            db.session.execute(db.text('SELECT 1'))
+            checks['database'] = 'ok'
+        except Exception as e:  # noqa: BLE001
+            ok = False
+            checks['database'] = f'error: {e}'
+        status = 'ok' if ok else 'error'
+        return jsonify({'status': status, 'checks': checks}), 200 if ok else 503
 
     return app
 
@@ -77,6 +98,27 @@ def _configure_logging(app):
     ))
     app.logger.handlers = [handler]
     app.logger.setLevel(logging.INFO)
+
+
+def _register_slow_query_logging(app):
+    """慢查询日志：统计每条 SQL 执行耗时，超过阈值记录 WARNING。"""
+    threshold_ms = app.config.get('SLOW_QUERY_MS', 200)
+
+    @event.listens_for(Engine, 'before_cursor_execute')
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        conn.info.setdefault('_slow_start', time.perf_counter())
+
+    @event.listens_for(Engine, 'after_cursor_execute')
+    def _after(conn, cursor, statement, parameters, context, executemany):
+        started = conn.info.pop('_slow_start', None)
+        if started is None:
+            return
+        dur_ms = (time.perf_counter() - started) * 1000
+        if dur_ms >= threshold_ms:
+            sql = statement.splitlines()[0][:200] if statement else ''
+            app.logger.warning(
+                'slow_query dur_ms=%.1f sql=%s', dur_ms, sql,
+            )
 
 
 def _register_request_logging(app):

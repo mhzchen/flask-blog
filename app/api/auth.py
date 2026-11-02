@@ -1,5 +1,8 @@
 from flask import Blueprint, request, jsonify, g
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import (
+    create_access_token, create_refresh_token, jwt_required,
+    get_jwt_identity,
+)
 
 from app.models import User, db
 from app import limiter
@@ -37,8 +40,13 @@ def register():
     # 异步发送欢迎邮件（broker 不可用时不影响注册）
     enqueue(send_welcome_email, user.id)
 
-    token = create_access_token(identity=str(user.id))
-    return jsonify({'access_token': token, 'user': user.to_dict()}), 201
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
+    return jsonify({
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'user': user.to_dict(),
+    }), 201
 
 
 @auth_bp.post('/login')
@@ -51,8 +59,13 @@ def login():
     if user is None or not user.check_password(body.password):
         return jsonify({'error': '用户名或密码错误。'}), 401
 
-    token = create_access_token(identity=str(user.id))
-    return jsonify({'access_token': token, 'user': user.to_dict()})
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
+    return jsonify({
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'user': user.to_dict(),
+    })
 
 
 @auth_bp.get('/me')
@@ -63,3 +76,18 @@ def me():
     if user is None:
         return jsonify({'error': '用户不存在。'}), 404
     return jsonify({'user': user.to_dict()})
+
+
+@auth_bp.post('/refresh')
+@limiter.limit("30 per minute")
+@jwt_required(refresh=True)
+def refresh():
+    """用 refresh token 换取新的 access token（access 过期后自动续期，无需重新登录）。
+
+    refresh token 有效期较长（默认 7 天），仅用于换 access，不直接访问业务接口。
+    """
+    user = db.session.get(User, int(get_jwt_identity()))
+    if user is None:
+        return jsonify({'error': '用户不存在。'}), 404
+    new_access = create_access_token(identity=str(user.id))
+    return jsonify({'access_token': new_access})

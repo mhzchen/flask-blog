@@ -78,3 +78,37 @@ def test_me_user_not_found(client, app, user_headers, normal_user):
     db.session.commit()
     resp = client.get('/api/auth/me', headers=user_headers)
     assert resp.status_code == 404
+
+# ---------- 阶段③ 补充：refresh token ----------
+
+def test_login_returns_refresh_token(client, normal_user):
+    resp = client.post('/api/auth/login',
+                       json={'username': 'alice', 'password': 'secret123'})
+    data = resp.get_json()
+    assert 'refresh_token' in data
+    assert 'access_token' in data
+
+
+def test_refresh_exchanges_new_access_token(client, normal_user):
+    login = client.post('/api/auth/login',
+                        json={'username': 'alice', 'password': 'secret123'}).get_json()
+    refresh = login['refresh_token']
+    resp = client.post('/api/auth/refresh',
+                       headers={'Authorization': f'Bearer {refresh}'})
+    assert resp.status_code == 200
+    assert 'access_token' in resp.get_json()
+
+
+def test_refresh_rejects_access_token(client, normal_user):
+    # access token 不可用于 refresh（token 类型不匹配，库返回 422）
+    login = client.post('/api/auth/login',
+                        json={'username': 'alice', 'password': 'secret123'}).get_json()
+    access = login['access_token']
+    resp = client.post('/api/auth/refresh',
+                       headers={'Authorization': f'Bearer {access}'})
+    assert resp.status_code == 422
+
+
+def test_refresh_no_token(client):
+    resp = client.post('/api/auth/refresh')
+    assert resp.status_code == 401

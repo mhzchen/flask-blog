@@ -9,12 +9,29 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///blog.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # 连接池取连接前先 ping，自动丢弃 MySQL 主动断开的陈旧连接，避免 500 Broken pipe
-    SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True}
+    # ---------- 连接池调优（MySQL 生效，SQLite 忽略） ----------
+    # pool_pre_ping：取连接前先 ping，自动丢弃 MySQL 主动断开的陈旧连接，避免 500 Broken pipe
+    # pool_size / max_overflow：连接池基础大小 + 溢出上限（并发峰值可临时多开）
+    # pool_recycle：连接最长存活时间，避免超过 MySQL wait_timeout 被服务端回收
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_size': int(os.environ.get('DB_POOL_SIZE', 5)),
+        'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', 10)),
+        'pool_recycle': int(os.environ.get('DB_POOL_RECYCLE', 1800)),
+        'pool_timeout': int(os.environ.get('DB_POOL_TIMEOUT', 10)),
+    }
+
+    # ---------- 慢查询日志 ----------
+    # 单条 SQL 执行超过该毫秒数时记录 WARNING，便于定位慢查询（对应知识域：慢查询分析）
+    SLOW_QUERY_MS = int(os.environ.get('SLOW_QUERY_MS', 200))
 
     # JWT 认证配置
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key-please-change-0123456789abcdef')
-    JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_EXPIRES', 86400))  # 秒
+    JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_EXPIRES', 900))        # 秒：access token 15 分钟
+    JWT_REFRESH_TOKEN_EXPIRES = int(os.environ.get('JWT_REFRESH_EXPIRES', 604800))  # 秒：refresh token 7 天
+    JWT_TOKEN_LOCATION = ['headers']
+    JWT_HEADER_NAME = 'Authorization'
+    JWT_HEADER_TYPE = 'Bearer'
     # 允许跨域的来源（Vue 开发服务器）
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173')
 
@@ -32,7 +49,8 @@ class Config:
     CELERY_TASK_EAGER_PROPAGATES = os.environ.get('CELERY_TASK_EAGER_PROPAGATES', 'false').lower() in ('1', 'true', 'yes', 'on')
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
-    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'redis://localhost:6379/2')
+    # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
 
 
 class DevelopmentConfig(Config):
