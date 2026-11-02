@@ -47,7 +47,11 @@ def register():
 def login():
     """用户登录：用户名 + 密码，成功返回 token。"""
     body = g.validated
-    user = auth_service.login(body.username.strip(), body.password)
+    try:
+        user = auth_service.login(body.username.strip(), body.password)
+    except ServiceError as e:
+        # 账号锁定等业务校验失败（429），直接返回，不进入 401 分支
+        return jsonify({"error": e.message}), e.status_code
     if user is None:
         return jsonify({"error": "用户名或密码错误。"}), 401
 

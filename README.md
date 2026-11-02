@@ -146,13 +146,36 @@ docker compose up -d --build
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（123 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测）
+- 全量测试：`venv\Scripts\python -m pytest`（130 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深）
 - 前端：`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ## 性能优化
 
 - **杜绝 N+1**：文章列表/收藏列表/后台列表接口通过 `joinedload(Post.category)` + `selectinload(Post.tags)` 一次性预加载关联，点赞数用单条 `GROUP BY` 聚合查询批量计算。实测 GET /api/posts 返回 6 篇文章只触发 4 条 SQL（优化前约 19 条，与数据量无关）。
 - MySQL 全文搜索：关键词搜索走 FULLTEXT 组合索引（ngram 中文分词），SQLite 测试环境回退 LIKE。
+
+### 压测基线（实测，`scripts/load_test.py`）
+
+多线程并发压测后端 8000（gunicorn 4 workers/2 threads），并发 20、总量 400：
+
+| 场景 | 吞吐 | avg | p50 | p95 | p99 | 错误率 |
+|---|---|---|---|---|---|---|
+| `/api/posts`（Redis 缓存命中） | **79 QPS** | 246ms | 163ms | 774ms | 1858ms | 0% |
+| `/api/posts/1`（DB 直查，无缓存） | **24 QPS** | 800ms | 453ms | 1631ms | 8709ms | 0% |
+
+结论与方向：
+- **缓存是最大性能杠杆**：同负载下缓存路径吞吐是 DB 直查的 3.3 倍，p99 延迟低 4.7 倍；
+- DB 直查路径（文章详情/无缓存列表）在高并发下延迟显著上升，**下一步可对文章详情页做细粒度缓存**（短 TTL + 按浏览量失效）；
+- 本机单容器、20 并发下的基线；生产多实例横向扩容 + 连接池调优可进一步提升。
+
+复现：`venv\Scripts\python scripts\load_test.py --url http://localhost:8000/api/posts --concurrency 20 --total 400`
+
+## 安全纵深
+
+- **安全响应头**（`app/security.py`）：每个响应注入 `CSP / X-Frame-Options: DENY / X-Content-Type-Options: nosniff / Referrer-Policy / Permissions-Policy`，HTTPS 下追加 `HSTS`，防点击劫持、MIME 嗅探与内容注入；`SECURITY_HEADERS_ENABLED` 可开关。
+- **登录失败锁定**：连续登录失败达 `LOGIN_MAX_FAILURES`（默认 5）次，账号锁定 `LOGIN_LOCKOUT_SECONDS`（默认 300）秒，防暴力破解；生产多实例可换 Redis 做共享计数。
+- **密码强度校验**：注册密码至少 8 位且同时含字母和数字，弱密码返回 422。
+- **既有防护**：XSS（后端 `bleach` 净化 + 前端 DOMPurify）、JWT 双 token + 刷新、接口限流（Redis 存储）、请求参数 Pydantic 校验。
 
 ## 可观测性
 

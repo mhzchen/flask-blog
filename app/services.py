@@ -10,6 +10,8 @@
     service    → 业务规则（本文件）
     api 路由   → HTTP 编排
 """
+import re
+import time
 from typing import Optional
 
 from app.cache import invalidate
@@ -31,6 +33,10 @@ from app.repositories import (
 )
 from app.sanitize import sanitize_html
 
+# 登录失败计数（进程内）：{username: [失败次数, 锁定截止时间]}。
+# 单实例/单机够用；多实例部署建议换成 Redis INCR + EXPIRE 做共享锁定。
+_LOGIN_FAILURES: dict[str, list] = {}
+
 
 class ServiceError(Exception):
     """业务校验失败：携带对外的 HTTP 状态码与错误消息。"""
@@ -47,7 +53,8 @@ class AuthService:
     """注册 / 登录 / 用户信息。"""
 
     def register(self, username: str, email: str, password: str) -> User:
-        """注册：校验唯一性后创建用户。已占用抛 409。"""
+        """注册：校验唯一性 + 密码强度后创建用户。已占用抛 409。"""
+        _validate_password_strength(password)
         if user_repo.get_by_username(username):
             raise ServiceError("用户名已被使用。", 409)
         if user_repo.get_by_email(email):
@@ -55,10 +62,14 @@ class AuthService:
         return user_repo.create(username, email, password)
 
     def login(self, username: str, password: str) -> Optional[User]:
-        """登录：校验用户名 + 密码，失败返回 None（由路由转 401）。"""
+        """登录：校验用户名 + 密码 + 失败锁定，失败返回 None（由路由转 401）。"""
+        if _is_locked(username):
+            raise ServiceError("尝试过于频繁，账号已暂时锁定。", 429)
         user = user_repo.get_by_username(username)
         if user is None or not user.check_password(password):
+            _record_failure(username)
             return None
+        _clear_failures(username)
         return user
 
     def get_or_404(self, user_id: int) -> User:
@@ -243,6 +254,46 @@ class AdminPostService:
 
 
 # ============================ 工具函数 ============================
+
+def _validate_password_strength(password: str) -> None:
+    """密码强度：至少 8 位，且同时包含字母与数字。不满足抛 422。"""
+    if len(password) < 8:
+        raise ServiceError("密码至少 8 位。", 422)
+    has_letter = re.search(r"[A-Za-z]", password) is not None
+    has_digit = re.search(r"[0-9]", password) is not None
+    if not (has_letter and has_digit):
+        raise ServiceError("密码需同时包含字母和数字。", 422)
+
+
+def _record_failure(username: str) -> None:
+    """记录一次登录失败；达到阈值则锁定账号一段时间。"""
+    from flask import current_app
+    max_failures = current_app.config.get("LOGIN_MAX_FAILURES", 5)
+    lockout = current_app.config.get("LOGIN_LOCKOUT_SECONDS", 300)
+    record = _LOGIN_FAILURES.setdefault(username, [0, 0.0])
+    record[0] += 1
+    if record[0] >= max_failures:
+        record[1] = time.time() + lockout
+        record[0] = 0
+
+
+def _is_locked(username: str) -> bool:
+    """账号是否处于锁定状态。"""
+    record = _LOGIN_FAILURES.get(username)
+    if not record:
+        return False
+    if record[1] and time.time() < record[1]:
+        return True
+    # 锁定过期，清理
+    if record[1] and time.time() >= record[1]:
+        _LOGIN_FAILURES.pop(username, None)
+    return False
+
+
+def _clear_failures(username: str) -> None:
+    """登录成功，清除失败记录。"""
+    _LOGIN_FAILURES.pop(username, None)
+
 
 def db_commit():
     """统一提交当前会话（业务层只调用它，不直接碰 db.session）。"""

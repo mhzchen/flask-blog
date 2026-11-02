@@ -3,19 +3,21 @@ import logging
 import time
 import uuid
 
-from flask import Flask, g, request, jsonify
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
+from config import get_config
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
-from config import Config, get_config
-from app.celery_app import init_celery
-from app.openapi import register_openapi_routes
-from app.errors import register_error_handlers
+from flask_jwt_extended import JWTManager
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+from app.celery_app import init_celery
+from app.errors import register_error_handlers
+from app.openapi import register_openapi_routes
+from app.security import register_security_headers
 
 db = SQLAlchemy()
 limiter = Limiter(key_func=get_remote_address)
@@ -49,6 +51,9 @@ def create_app(config_class=None):
     # 统一 JSON 错误处理（所有错误都返回结构化 JSON）
     register_error_handlers(app)
 
+    # 安全纵深：统一注入安全响应头（CSP/HSTS/X-Frame-Options 等）
+    register_security_headers(app)
+
     # 请求日志中间件（生成 request_id、记录耗时与状态）
     _register_request_logging(app)
 
@@ -59,12 +64,12 @@ def create_app(config_class=None):
     init_celery(app)
 
     # 注册 API 蓝图（在 create_app 内部导入，避免循环导入）
-    from app.api.auth import auth_bp
-    from app.api.posts import posts_bp
-    from app.api.categories import categories_bp
-    from app.api.favorites import favorites_bp
     from app.api.admin import admin_bp
+    from app.api.auth import auth_bp
+    from app.api.categories import categories_bp
     from app.api.comments import comments_bp
+    from app.api.favorites import favorites_bp
+    from app.api.posts import posts_bp
     from app.api.tags import tags_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -92,7 +97,7 @@ def create_app(config_class=None):
         try:
             db.session.execute(db.text('SELECT 1'))
             checks['database'] = 'ok'
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             ok = False
             checks['database'] = f'error: {e}'
         status = 'ok' if ok else 'error'

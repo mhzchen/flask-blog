@@ -51,6 +51,16 @@ class Config:
         'CELERY_TASK_ALWAYS_EAGER', 'false').lower() in ('1', 'true', 'yes', 'on')
     CELERY_TASK_EAGER_PROPAGATES = os.environ.get(
         'CELERY_TASK_EAGER_PROPAGATES', 'false').lower() in ('1', 'true', 'yes', 'on')
+    # ---------- 安全纵深 ----------
+    # 统一安全响应头开关（生产开启；测试可关避免断言干扰）
+    SECURITY_HEADERS_ENABLED = os.environ.get(
+        'SECURITY_HEADERS_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
+
+    # ---------- 登录保护 ----------
+    # 连续登录失败达到阈值后锁定该账号一段时间（防暴力破解）
+    LOGIN_MAX_FAILURES = int(os.environ.get('LOGIN_MAX_FAILURES', 5))
+    LOGIN_LOCKOUT_SECONDS = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', 300))
+
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流
@@ -79,6 +89,7 @@ class TestingConfig(Config):
     CELERY_BROKER_URL = 'memory://'
     CELERY_RESULT_BACKEND = 'cache+memory://'
     RATELIMIT_ENABLED = False
+    SECURITY_HEADERS_ENABLED = False
 
 
 class ProductionConfig(Config):
