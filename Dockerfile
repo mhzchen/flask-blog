@@ -1,9 +1,13 @@
-# 后端镜像：Flask + gunicorn
+# 后端镜像：Flask + gunicorn（非 root 运行，最小权限）
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
+
+# 建非 root 运行用户（uid/gid 1000，与宿主机普通用户对齐，便于后续挂载卷）
+RUN groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid appuser --create-home --shell /usr/sbin/nologin appuser
 
 WORKDIR /app
 
@@ -11,10 +15,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
-# 拷贝应用代码（.dockerignore 已排除 venv/.env/logs 等）
+# 拷贝应用代码（.dockerignore 已排除 venv/.env/logs/tests/scripts 等）
 COPY . .
 
-RUN chmod +x docker_entrypoint.sh
+RUN chmod +x docker_entrypoint.sh \
+    && chown -R appuser:appuser /app
+
+# 以非 root 运行：容器被攻破也无法获得 root 权限（纵深防御）
+USER appuser
 
 EXPOSE 8000
 

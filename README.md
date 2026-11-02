@@ -130,6 +130,8 @@ docker compose up -d --build
 
 启动流程（`docker_entrypoint.sh`）：等 MySQL 就绪 → 自动迁移建表（全新库建表+seed / 有表 stamp）→ 启动 gunicorn。
 
+**生产化**：后端容器以非 root 用户 `appuser`（uid 1000）运行，容器被攻破也无法获得 root 权限（纵深防御）；`.dockerignore` 收紧，`tests/scripts/配置` 等非运行文件不进入镜像，镜像仅约 82MB。
+
 访问：
 - 前端：**http://localhost:8080/**（nginx 提供静态页 + 反向代理 `/api` → backend:8000）
 - Swagger UI 交互文档：**http://localhost:8000/swagger**（12 个 REST 接口，含 JWT 认证可在线调试）

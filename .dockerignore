@@ -10,3 +10,9 @@ instance
 *.log
 frontend
 node_modules
+tests
+scripts
+pytest.ini
+mypy.ini
+ruff.toml
+*.md
