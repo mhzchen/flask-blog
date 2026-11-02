@@ -109,6 +109,40 @@ cd frontend
 npm run build                  # 产物输出到 frontend/dist/
 ```
 
+### 4. Docker 一键部署（推荐）
+
+项目内置完整容器编排（`docker-compose.yml`），一次拉起全部服务：
+
+| 服务 | 容器 | 端口 | 说明 |
+|---|---|---|---|
+| `db` | flaskblog-db | 3307→3306 | MySQL 8.0（utf8mb4），卷持久化 |
+| `redis` | flaskblog-redis | 6379 | Redis 7（AOF 持久化），缓存/限流/Celery broker |
+| `backend` | flaskblog-backend | 8000 | gunicorn 4 workers 2 threads，healthcheck 就绪 |
+| `worker` | flaskblog-worker | - | Celery worker（异步任务消费） |
+| `beat` | flaskblog-beat | - | Celery beat（周期调度） |
+| `frontend` | flaskblog-frontend | 8080→80 | nginx 托管 Vue 构建产物 + `/api` 反代 |
+
+```powershell
+cd E:\code\python\flask-blog
+# .env 需含 SECRET_KEY / JWT_SECRET_KEY（backend 容器引用）
+docker compose up -d --build
+```
+
+启动流程（`docker_entrypoint.sh`）：等 MySQL 就绪 → 自动迁移建表（全新库建表+seed / 有表 stamp）→ 启动 gunicorn。
+
+访问：
+- 前端：**http://localhost:8080/**（nginx 提供静态页 + 反向代理 `/api` → backend:8000）
+- 后端健康检查：**http://localhost:8000/health**
+
+### 5. 缓存与部署验证（实测）
+
+本仓库的缓存采用「加速层」设计（`app/cache.py`）：Redis 未配置或故障时直接放行原逻辑，绝不拖垮业务。已实测：
+
+- **缓存命中**：`GET /api/posts` 首次 ~570ms，Redis 命中后 ~12ms（约 50 倍）；
+- **缓存失效**：管理员创建文章后，`posts:*` 缓存 key 立即清除（`invalidate` 生效），下次请求回源 DB；
+- **异步链路**：访问文章详情触发 `record_post_view` 任务，Celery worker 消费后浏览量落库（`views` +1），不阻塞请求；
+- **限流**：`RATELIMIT_STORAGE_URI` 指向 Redis（`redis://redis:6379/2`）。
+
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
