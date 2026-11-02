@@ -79,6 +79,16 @@ class AuthService:
             raise ServiceError("用户不存在。", 404)
         return user
 
+    def change_password(self, user_id: int, old_password: str, new_password: str) -> User:
+        """修改密码：校验旧密码 + 新密码强度后更新。旧密码错抛 400。"""
+        user = self.get_or_404(user_id)
+        if not user.check_password(old_password):
+            raise ServiceError("旧密码不正确。", 400)
+        _validate_password_strength(new_password)
+        user.set_password(new_password)
+        db_commit()
+        return user
+
     current_user = get_or_404
 
 
@@ -404,7 +414,8 @@ def _make_slug(text: str) -> str:
     import hashlib
     import time
     base = text[:20]
-    h = hashlib.md5(f"{text}{time.time()}".encode()).hexdigest()[:6]
+    # slug 后缀用于唯一性（非加密/签名用途），显式声明避免 bandit 误报安全风险
+    h = hashlib.md5(f"{text}{time.time()}".encode(), usedforsecurity=False).hexdigest()[:6]
     return f"{base}-{h}"
 
 

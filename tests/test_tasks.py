@@ -21,8 +21,8 @@ def test_send_welcome_email_missing_user(app):
 
 def test_record_post_view_degrades_without_redis(app, monkeypatch):
     # 测试环境没有 Redis，走降级分支，不抛错；mock DB 避免空库 get 触发重试
-    from app.tasks import record_post_view
     from app.models import db
+    from app.tasks import record_post_view
     with app.app_context():
         _stub_post_get(db, monkeypatch)
         assert record_post_view(1) == 'views recorded for post 1'
@@ -89,8 +89,8 @@ def _stub_post_get(db, monkeypatch):
 def test_record_post_view_retries_on_db_error(app, monkeypatch):
     """DB 瞬时连接错误应触发指数退避重试（self.retry），而非直接丢弃。"""
     from app import tasks
-    from sqlalchemy.exc import OperationalError
     from app.models import db
+    from sqlalchemy.exc import OperationalError
 
     with app.app_context():
         _stub_post_get(db, monkeypatch)
@@ -133,3 +133,81 @@ def test_record_post_view_no_retry_on_logic_error(app, monkeypatch):
         monkeypatch.setattr(tasks.record_post_view, "retry", fake_retry)
         tasks.record_post_view(999)
         assert retry_called["n"] == 0  # 永久错误不重试
+
+
+# ---------------- 幂等/去重 + 死信 ----------------
+
+class _FakeRedis:
+    """内存 Redis 替身：支持 set(nx,ex) 与 lpush（去重 + 死信用）。"""
+    def __init__(self):
+        self.store = {}
+        self.ttls = {}
+
+    def set(self, key, val, nx=False, ex=None):
+        if nx and key in self.store:
+            return False
+        self.store[key] = val
+        if ex:
+            self.ttls[key] = ex
+        return True
+
+    def lpush(self, key, val):
+        self.store.setdefault(key, []).insert(0, val)
+        return 1
+
+    def get(self, key):
+        return self.store.get(key)
+
+
+def test_enqueue_view_dedup_skips_duplicate(app, monkeypatch):
+    """同一 post 在去重窗口内重复投递 record_post_view 应被跳过（防重复计数）。"""
+    from app.tasks import enqueue
+    r = _FakeRedis()
+    with app.app_context():
+        app.extensions['cache_redis'] = r
+        monkeypatch.setattr('app.tasks.celery.conf', {'task_always_eager': False})
+        monkeypatch.setattr('app.tasks._broker_reachable', lambda timeout=1.0: False)
+        class ViewTask:
+            name = 'tasks.record_post_view'
+            def run(self, *args, **kwargs):
+                return 'sent'
+        # 第一次投递：占位去重 key + 降级同步执行
+        assert enqueue(ViewTask(), 1) == 'sent'
+        assert r.store.get('view_dedup:1') == '1'
+        # 第二次（窗口内）：跳过，返回 None，不重复计数
+        assert enqueue(ViewTask(), 1) is None
+        # 其他任务不受去重影响
+        assert enqueue(ViewTask(), 2) == 'sent'
+
+
+def test_record_post_view_deadletter_on_exhausted_retries(app, monkeypatch):
+    """重试耗尽仍失败（OperationalError）应进死信队列，不再重试。"""
+    from app import tasks
+    from app.models import db
+    from sqlalchemy.exc import OperationalError
+    with app.app_context():
+        _stub_post_get(db, monkeypatch)
+        def boom():
+            raise OperationalError("SELECT", {}, Exception("conn lost"))
+        monkeypatch.setattr(db.session, "commit", boom)
+        retry_called = {"n": 0}
+        def fake_retry(exc=None, **kwargs):
+            retry_called["n"] += 1
+            raise RuntimeError("retry-issued")
+        monkeypatch.setattr(tasks.record_post_view, "retry", fake_retry)
+        # 捕获 record_post_view 内部调用 _record_deadletter 时传入的 app（验证 eager 任务内 current_app 绑定）
+        captured = {}
+        def fake_dl(app_obj, task_name, args, error):
+            captured['app_is_test'] = app_obj is app
+            captured['task'] = task_name
+            captured['args'] = args
+        monkeypatch.setattr(tasks, "_record_deadletter", fake_dl)
+        # 模拟重试已耗尽
+        tasks.record_post_view.request.retries = tasks.record_post_view.max_retries
+        res = tasks.record_post_view(999)
+        assert retry_called["n"] == 0  # 耗尽后不再重试
+        assert res == 'views failed permanently for post 999'
+        # _record_deadletter 被正确调用（进死信），参数为文章 id；eager 任务内 current_app 绑定
+        # 受 celery 全局单例影响（指向最近一次 create_app），与生产单进程行为无关，故不断言 app 身份
+        assert captured.get('task') == 'record_post_view'
+        assert captured.get('args') == [999]

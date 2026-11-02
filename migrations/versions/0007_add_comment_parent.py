@@ -14,8 +14,12 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('comments', sa.Column('parent_id', sa.Integer(), sa.ForeignKey('comments.id'), nullable=True))
+    # batch_alter_table：SQLite 用 copy-and-move 重建表（支持 ALTER 加约束列），MySQL 走原生 ALTER；
+    # 让 dev(SQLite)/prod(MySQL) 都能跑完整迁移链
+    with op.batch_alter_table('comments') as batch_op:
+        batch_op.add_column(sa.Column('parent_id', sa.Integer(), sa.ForeignKey('comments.id', name='fk_comments_parent'), nullable=True))
 
 
 def downgrade():
-    op.drop_column('comments', 'parent_id')
+    with op.batch_alter_table('comments') as batch_op:
+        batch_op.drop_column('parent_id')

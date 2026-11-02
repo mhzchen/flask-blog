@@ -127,7 +127,7 @@ def test_detail_invalidate_clears_key(app, post):
 
 
 def test_detail_cache_missing_404(app):
-    from app.services import post_service, ServiceError
+    from app.services import ServiceError, post_service
     app.config['CACHE_ENABLED'] = True
     app.extensions['cache_redis'] = FakeRedis()
     with app.app_context():
@@ -141,7 +141,7 @@ def test_detail_cache_missing_404(app):
 
 def test_detail_cache_negative_marker_written(app):
     # 防穿透：不存在的文章也写空标记（短 TTL），第二次请求不再打 DB
-    from app.services import post_service, ServiceError
+    from app.services import ServiceError, post_service
     client = FakeRedis()
     app.config['CACHE_ENABLED'] = True
     app.extensions['cache_redis'] = client
@@ -156,8 +156,7 @@ def test_detail_cache_negative_marker_written(app):
 
 def test_detail_cache_negative_marker_hit_404_without_db(app, monkeypatch):
     # 空标记命中即抛 404，且不再触发 DB 查询（防穿透生效）
-    from app.services import post_service, ServiceError
-    from app.services import _NEGATIVE
+    from app.services import _NEGATIVE, ServiceError, post_service
     client = FakeRedis()
     app.config['CACHE_ENABLED'] = True
     app.extensions['cache_redis'] = client
@@ -180,8 +179,9 @@ def test_detail_cache_negative_marker_hit_404_without_db(app, monkeypatch):
 
 def test_detail_cache_ttl_jitter_within_range(app, post):
     # 防雪崩：TTL 抖动落在 base ±20% 内
-    from app.services import post_service
     import random
+
+    from app.services import post_service
     random.seed(7)
     client = FakeRedis()
     app.config['CACHE_ENABLED'] = True
@@ -189,7 +189,6 @@ def test_detail_cache_ttl_jitter_within_range(app, post):
     app.extensions['cache_redis'] = client
     with app.app_context():
         post_service.get_detail_cached(post.id)
-    key = 'post_detail:%d' % post.id
     # FakeRedis 不存 TTL，改用计算方式：验证 setex 收到抖动后的 ttl
     # 直接断言 range 逻辑：抖动应在 [48,72]
     assert True  # 抖动范围由实现保证，此处验证调用未抛错

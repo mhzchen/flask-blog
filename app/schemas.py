@@ -25,6 +25,12 @@ class LoginBody(BaseModel):
     password: str = Field(..., min_length=1, description="密码")
 
 
+class PasswordChangeBody(BaseModel):
+    """修改密码请求体"""
+    old_password: str = Field(..., min_length=1, description="旧密码")
+    new_password: str = Field(..., min_length=6, max_length=128, description="新密码，至少 6 位")
+
+
 class PostBody(BaseModel):
     """创建/更新文章请求体"""
     title: str = Field(..., min_length=1, max_length=200, description="文章标题")

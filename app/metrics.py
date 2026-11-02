@@ -150,7 +150,7 @@ def render_metrics(state):
 
     lines.append("# HELP cache_degraded_total Redis down, degraded to direct query")
     lines.append("# TYPE cache_degraded_total counter")
-    for (name, prefix), n in sorted(state.get("cache", {}).items()):
+    for (name, _prefix), n in sorted(state.get("cache", {}).items()):
         if name == "cache_degraded_total":
             lines.append("cache_degraded_total %d" % n)
 

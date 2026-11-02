@@ -132,7 +132,7 @@ class FakeRedis:
 
 def test_login_lockout_shared_redis(app):
     """计数落在 Redis：即使本进程 dict 无记录，也能判定锁定（多实例共享生效）。"""
-    from app.services import _record_failure, _is_locked, _clear_failures, _LOGIN_FAILURES
+    from app.services import _LOGIN_FAILURES, _clear_failures, _is_locked, _record_failure
     r = FakeRedis()
     with app.app_context():
         _LOGIN_FAILURES.clear()
@@ -155,7 +155,7 @@ def test_login_lockout_shared_redis(app):
 
 def test_login_lockout_redis_disabled_fallback_dict(app):
     """关闭 Redis 共享（或 Redis 不可用）时降级为进程内 dict，单机仍能锁定。"""
-    from app.services import _record_failure, _is_locked, _LOGIN_FAILURES
+    from app.services import _LOGIN_FAILURES, _is_locked, _record_failure
     with app.app_context():
         _LOGIN_FAILURES.clear()
         app.config['LOGIN_REDIS_ENABLED'] = False
@@ -165,3 +165,68 @@ def test_login_lockout_redis_disabled_fallback_dict(app):
         assert _is_locked('carol') is True
         # 计数落在进程内 dict
         assert _LOGIN_FAILURES.get('carol') is not None
+
+
+# ---------------- JWT 注销/黑名单（登出即时失效 + 改密吊销） ----------------
+
+class _BlacklistRedis:
+    """内存 Redis 替身：支持 JWT 黑名单需要的 get/set/setex。"""
+    def __init__(self):
+        self.store = {}
+        self.ttls = {}
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def set(self, key, val):
+        self.store[key] = val
+
+    def setex(self, key, ttl, val):
+        self.store[key] = val
+        self.ttls[key] = ttl
+
+
+def _jwt_login(client, username='alice', password='secret123'):
+    resp = client.post('/api/auth/login', json={'username': username, 'password': password})
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()['access_token']
+
+
+def test_logout_revokes_access_token_immediately(app, client, normal_user):
+    """登出后，已签发 access token 立即失效（下次带它访问被 401）。"""
+    app.extensions['cache_redis'] = _BlacklistRedis()
+    token = _jwt_login(client)
+    h = {'Authorization': f'Bearer {token}'}
+    assert client.get('/api/auth/me', headers=h).status_code == 200
+    assert client.post('/api/auth/logout', headers=h).status_code == 200
+    # 登出后原 token 失效
+    assert client.get('/api/auth/me', headers=h).status_code == 401
+
+
+def test_change_password_revokes_old_tokens(app, client, normal_user):
+    """改密后：旧 token 立即失效、旧密码登录失败、新密码可登录。"""
+    app.extensions['cache_redis'] = _BlacklistRedis()
+    token = _jwt_login(client)
+    h = {'Authorization': f'Bearer {token}'}
+    assert client.get('/api/auth/me', headers=h).status_code == 200
+    resp = client.post('/api/auth/password', headers=h,
+                       json={'old_password': 'secret123', 'new_password': 'newsecret456'})
+    assert resp.status_code == 200, resp.get_json()
+    # 旧 token 立即失效
+    assert client.get('/api/auth/me', headers=h).status_code == 401
+    # 旧密码登录失败（锁定重试会误伤，这里只验证一次）
+    r = client.post('/api/auth/login', json={'username': 'alice', 'password': 'secret123'})
+    assert r.status_code == 401
+    # 新密码可登录
+    assert _jwt_login(client, password='newsecret456')
+
+
+def test_blocklist_degrades_without_redis(app, client, normal_user):
+    """无 Redis 时黑名单降级放行：logout 返回降级提示，token 到期前仍可用（不误拒）。"""
+    app.extensions.pop('cache_redis', None)  # 无 Redis
+    token = _jwt_login(client)
+    h = {'Authorization': f'Bearer {token}'}
+    resp = client.post('/api/auth/logout', headers=h)
+    assert resp.status_code == 200
+    assert '黑名单暂不可用' in resp.get_json()['message']
+    assert client.get('/api/auth/me', headers=h).status_code == 200  # 降级放行

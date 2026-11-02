@@ -1,13 +1,17 @@
-from flask import Blueprint, g, jsonify
+import time
+
+from flask import Blueprint, current_app, g, jsonify
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
+    get_jwt,
     get_jwt_identity,
     jwt_required,
 )
 
 from app import limiter
-from app.schemas import LoginBody, RegisterBody, validate_body
+from app.jwt_blacklist import revoke_token, revoke_user
+from app.schemas import LoginBody, PasswordChangeBody, RegisterBody, validate_body
 from app.services import ServiceError, auth_service
 from app.tasks import enqueue, send_welcome_email
 
@@ -89,3 +93,31 @@ def refresh():
         return jsonify({"error": e.message}), e.status_code
     new_access = create_access_token(identity=str(user.id))
     return jsonify({"access_token": new_access})
+
+
+@auth_bp.post("/logout")
+@jwt_required()
+def logout():
+    """登出：把当前 access token 的 jti 加入黑名单，之后该 token 立即失效。
+
+    Redis 不可用时降级为"到期自然失效"（仍返回成功，不报错）。
+    """
+    payload = get_jwt()
+    ttl = max(int(payload.get('exp', time.time())) - int(time.time()), 1)
+    ok = revoke_token(current_app._get_current_object(), payload.get('jti'), ttl)
+    return jsonify({"message": "已注销。" if ok else "已注销（黑名单暂不可用，token 到期前仍有效）。"})
+
+
+@auth_bp.post("/password")
+@jwt_required()
+@validate_body(PasswordChangeBody)
+def change_password():
+    """修改密码：校验旧密码后更新，并使该用户所有旧 token（含 refresh）立即失效，需重新登录。"""
+    body = g.validated
+    uid = int(get_jwt_identity())
+    try:
+        auth_service.change_password(uid, body.old_password, body.new_password)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    revoke_user(current_app._get_current_object(), uid)
+    return jsonify({"message": "密码已更新，请重新登录。"})

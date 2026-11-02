@@ -27,6 +27,18 @@ migrate = Migrate()
 jwt = JWTManager()
 
 
+@jwt.token_in_blocklist_loader
+def _check_token_blocklist(jwt_header, jwt_payload):
+    """登出/改密后的 token 立即失效：jti 黑名单 + 用户级撤销时间戳。
+
+    Redis 不可用时 is_blocked 降级放行，保证认证不因黑名单服务故障而中断。
+    """
+    from flask import current_app
+    from app.jwt_blacklist import is_blocked
+    app = current_app._get_current_object()  # type: ignore[attr-defined]
+    return is_blocked(app, jwt_payload.get('jti'), jwt_payload.get('sub'), jwt_payload.get('iat'))
+
+
 def create_app(config_class=None):
     """应用工厂：创建 Flask 应用实例。
 

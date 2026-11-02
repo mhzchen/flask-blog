@@ -97,7 +97,6 @@ def test_cache_hit_miss_metrics(mclient, metrics_app):
     metrics_app.config["CACHE_ENABLED"] = True
     metrics_app.extensions["cache_redis"] = FakeRedis()
 
-    from app.cache import cached
     from flask import jsonify
     calls = {"n": 0}
 

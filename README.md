@@ -145,7 +145,7 @@ docker compose up -d --build
 
 - **缓存命中**：`GET /api/posts` 首次 ~570ms，Redis 命中后 ~12ms（约 50 倍）；
 - **缓存失效**：管理员创建文章后，`posts:*` 缓存 key 立即清除（`invalidate` 生效），下次请求回源 DB；
-- **异步链路**：访问文章详情触发 `record_post_view` 任务，Celery worker 消费后浏览量落库（`views` +1），不阻塞请求；DB 瞬时连接错误按指数退避自动重试（2/4/8s，最多 3 次），永久错误记日志丢弃；任务全局超时保护（硬 60s/软 50s）；broker 不可达自动降级为同步执行，功能不丢；
+- **异步链路**：访问文章详情触发 `record_post_view` 任务，Celery worker 消费后浏览量落库（`views` +1），不阻塞请求；DB 瞬时连接错误按指数退避自动重试（2/4/8s，最多 3 次），重试耗尽仍失败则进死信队列（Redis `task_deadletter`，可追溯排查）；同一文章 120s 窗口内幂等去重（Redis SETNX，`view_dedup:<id>`），窗口内重复投递自动跳过防重复计数；任务全局超时保护（硬 60s/软 50s）；broker 不可达自动降级为同步执行，功能不丢；
 - **限流**：`RATELIMIT_STORAGE_URI` 指向 Redis（`redis://redis:6379/2`）；
 - **防雪崩**：所有缓存 TTL 加 ±20% 随机抖动（`CACHE_DETAIL_TIMEOUT` 基数），避免大量 key 同时过期集中打穿 DB；
 - **防穿透**：不存在的文章 id 也会写短 TTL 空标记（`CACHE_NEGATIVE_TIMEOUT`，默认 30s），命中即 404 且不再打 DB，恶意/误请求不拖垮数据库。
@@ -153,14 +153,14 @@ docker compose up -d --build
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（152 项用例，覆盖率 95.31%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池/Celery 重试/日志慢请求采样）
+- 全量测试：`venv\Scripts\python -m pytest`（157 项用例，覆盖率 94.38%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池/Celery 重试与幂等去重/死信/JWT 登出黑名单/日志慢请求采样）
 - 前端：`npm run test`（Vitest 8 项：XSS 净化单测 5 + PostCard 组件测试 3）、`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ### CI 流水线（`.github/workflows/ci.yml`）
 
-- **lint-typecheck**：ruff + mypy（setup-python 自带 pip 缓存）
+- **lint-typecheck**：ruff + mypy + 安全扫描（`bandit -r app -c .bandit` + `pip-audit -r requirements.txt`）（setup-python 自带 pip 缓存）
 - **test**：Python 3.11/3.12/3.13 矩阵跑全量 pytest（覆盖率门槛 90%），setup-python 自带 pip 缓存
-- **frontend**：setup-node + `npm ci --legacy-peer-deps`（兼容 vite5/vitest）+ `npm run test`（Vitest 8 项）+ `npm run build`（Vite 生产构建验证），npm 依赖缓存
+- **frontend**：setup-node + `npm ci --legacy-peer-deps`（兼容 vite5/vitest）+ `npm run test`（Vitest 8 项）+ `npm run build`（Vite 生产构建验证）+ `npm audit --omit=dev --audit-level=high`（生产依赖漏洞门禁），npm 依赖缓存
 - **DB Migration (MySQL)**：干净 MySQL 库跑 `flask db upgrade` 建全表，并校验建出的表与模型元数据一致（防迁移/模型漂移）
 
 ## 性能优化
@@ -189,6 +189,7 @@ docker compose up -d --build
 - **安全响应头**（`app/security.py`）：每个响应注入 `CSP / X-Frame-Options: DENY / X-Content-Type-Options: nosniff / Referrer-Policy / Permissions-Policy`，HTTPS 下追加 `HSTS`，防点击劫持、MIME 嗅探与内容注入；`SECURITY_HEADERS_ENABLED` 可开关。
 - **登录失败锁定**：连续登录失败达 `LOGIN_MAX_FAILURES`（默认 5）次，账号锁定 `LOGIN_LOCKOUT_SECONDS`（默认 300）秒，防暴力破解；失败计数默认存 Redis（`LOGIN_REDIS_ENABLED`，多 worker/多实例共享，锁定才不被分拆请求绕过），Redis 不可用自动降级为进程内计数。
 - **密码强度校验**：注册密码至少 8 位且同时含字母和数字，弱密码返回 422。
+- **JWT 登出黑名单**（`app/jwt_blacklist.py`）：`POST /api/auth/logout` 把当前 token 的 `jti` 写入 Redis 黑名单（TTL = 剩余有效期，自动过期），之后该 token 访问立即 401；`POST /api/auth/password` 改密后写入用户级撤销时间戳，该用户所有旧 token（含 refresh）即时失效需重新登录；Redis 不可用时降级放行（认证不因黑名单服务故障中断）。
 - **既有防护**：XSS（后端 `bleach` 净化 + 前端 DOMPurify）、JWT 双 token + 刷新、接口限流（Redis 存储）、请求参数 Pydantic 校验。
 
 ## 可观测性
@@ -209,6 +210,6 @@ flask --app wsgi db migrate -m "描述"
 flask --app wsgi db upgrade
 ```
 
-迁移已做**跨方言兼容**：全文索引（FULLTEXT + ngram）与索引存在性检查按方言处理（MySQL 用 information_schema，SQLite 用 sqlite_master；FULLTEXT 仅 MySQL 创建），保证 dev(SQLite)/prod(MySQL) 迁移链一致。CI 含独立 **DB Migration (MySQL)** job：在干净 MySQL 库跑 `flask db upgrade`，并校验建出的表与模型元数据一致（防迁移/模型漂移）。
+迁移已做**跨方言兼容**：全文索引（FULLTEXT + ngram）与索引存在性检查按方言处理（MySQL 用 information_schema，SQLite 用 sqlite_master；FULLTEXT 仅 MySQL 创建），保证 dev(SQLite)/prod(MySQL) 迁移链一致。CI 含独立 **DB Migration (MySQL)** job：在干净 MySQL 库跑 `flask db upgrade`，并校验建出的表与模型元数据一致（防迁移/模型漂移）。迁移使用 Alembic **batch mode**（`batch_alter_table`，约束须命名）处理 SQLite 方言不支持的 ALTER，dev(SQLite)/prod(MySQL) 均可从 0001 一路跑到 0007 全链，并可 downgrade 回退。
 
 > 原「服务端渲染（Jinja2 模板 + Flask-Login session）+ SQLite」版本已由本 API + Vue3 + MySQL 版本替代。
