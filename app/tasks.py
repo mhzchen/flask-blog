@@ -2,17 +2,52 @@
 
 任务里通过 current_app / db 访问应用状态（因为任务在应用上下文里执行）。
 """
+import socket
+
 from flask import current_app
 
 from app.celery_app import celery
 
 
-def enqueue(task, *args, **kwargs):
-    """安全地投递任务：broker 不可用时记录告警，不让请求失败。"""
+def _broker_reachable(timeout=1.0):
+    """快速探测 broker（Redis）是否可达。不可达返回 False，避免 task.delay 阻塞重试。"""
     try:
+        from urllib.parse import urlparse
+        url = celery.conf.get('broker_url', 'redis://localhost:6379/1')
+        parts = urlparse(url)
+        host = parts.hostname or 'localhost'
+        port = parts.port or 6379
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def enqueue(task, *args, **kwargs):
+    """安全地投递任务。
+
+    - broker（Redis）可达：异步投递，不阻塞请求；
+    - broker 不可达：先探测（1s），不可用则降级为【同步执行】任务本身（功能不丢），
+      绝不因异步通道故障拖慢请求（曾出现 Redis 未启动时阻塞 109 秒的问题）。
+    """
+    # 任何异常都不得抛给请求方（异步通道故障、任务本身报错均吞掉并记日志）
+    try:
+        # 测试环境已开 eager：直接同步执行；生产走真实 broker
+        if celery.conf.get('task_always_eager', False):
+            return task.run(*args, **kwargs)
+        # broker 不可达时不投递，直接降级同步执行
+        if not _broker_reachable():
+            current_app.logger.warning(
+                'broker 不可达，降级为同步执行: %s', task.name)
+            return task.run(*args, **kwargs)
         task.delay(*args, **kwargs)
     except Exception:
+        # broker 故障或任务同步执行报错：降级尝试同步执行，仍失败则只记日志
         current_app.logger.warning('任务投递失败: %s', task.name, exc_info=True)
+        try:
+            return task.run(*args, **kwargs)
+        except Exception:
+            current_app.logger.warning('任务同步执行也失败: %s', task.name, exc_info=True)
 
 
 @celery.task(name='tasks.send_welcome_email')

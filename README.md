@@ -72,7 +72,7 @@ CREATE DATABASE IF NOT EXISTS flask_blog
 在项目根目录的 `.env` 中配置数据库连接（已默认指向本机 `flask_blog` 库，按需改密码）：
 
 ```
-DATABASE_URL=mysql+pymysql://root:你的密码@localhost:3306/flask_blog?charset=utf8mb4
+DATABASE_URL=mysql+pymysql://root:你的密码@localhost:3307/flask_blog?charset=utf8mb4
 ```
 
 ### 1. 后端

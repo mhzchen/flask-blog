@@ -22,6 +22,12 @@ def init_celery(app):
         timezone='Asia/Shanghai',
         enable_utc=True,
         task_track_started=True,
+        # Redis/broker 不可用时快速失败（避免每个请求被连接重试阻塞数十秒）
+        broker_connection_retry=False,
+        broker_connection_retry_on_startup=False,
+        broker_connection_max_retries=0,
+        broker_transport_options={'socket_connect_timeout': 2, 'socket_timeout': 2},
+        task_publish_retry=False,
         # 测试环境可开启 eager：.delay() 同步执行，不发到 broker
         task_always_eager=app.config.get('CELERY_TASK_ALWAYS_EAGER', False),
         task_eager_propagates=app.config.get('CELERY_TASK_EAGER_PROPAGATES', False),
