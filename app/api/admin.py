@@ -74,7 +74,7 @@ def create_post():
 @validate_body(PostBody)
 def update_post(post_id):
     """更新文章（请求体经 Pydantic 校验，更新后失效文章列表缓存）"""
-    post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     body = g.validated
     category = db.session.get(Category, int(body.category_id))
     if category is None:
@@ -95,7 +95,7 @@ def update_post(post_id):
 @admin_required
 def delete_post(post_id):
     """删除文章（删除后失效文章列表缓存）"""
-    post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     db.session.delete(post)
     db.session.commit()
 
@@ -128,7 +128,7 @@ def create_category():
 @validate_body(CategoryBody)
 def update_category(cat_id):
     """更新分类（请求体经 Pydantic 校验，更新后失效分类缓存）"""
-    cat = Category.query.get_or_404(cat_id)
+    cat = db.get_or_404(Category, cat_id)
     body = g.validated
     name = body.name.strip()
     slug = body.slug.strip()
@@ -145,7 +145,7 @@ def update_category(cat_id):
 @admin_required
 def delete_category(cat_id):
     """删除分类（删除后失效分类缓存）"""
-    cat = Category.query.get_or_404(cat_id)
+    cat = db.get_or_404(Category, cat_id)
     db.session.delete(cat)
     db.session.commit()
 

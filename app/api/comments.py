@@ -18,7 +18,7 @@ comments_bp = Blueprint('comments', __name__)
 @comments_bp.get('/posts/<int:post_id>/comments')
 def list_comments(post_id):
     """文章评论列表（按时间升序，分页）"""
-    Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
 
@@ -40,14 +40,14 @@ def list_comments(post_id):
 @validate_body(CommentBody)
 def create_comment(post_id):
     """发表评论（需登录，请求体经 Pydantic 校验）"""
-    Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     body = g.validated
     content = body.content.strip()
     if not content:
         return jsonify({'error': '评论内容不能为空。'}), 422
     parent_id = body.parent_id
     if parent_id:
-        parent = Comment.query.get(parent_id)
+        parent = db.session.get(Comment, parent_id)
         if parent is None or parent.post_id != post_id:
             return jsonify({'error': '要回复的评论不存在或不属于该文章。'}), 400
         parent_id = parent.parent_id or parent.id
@@ -62,7 +62,7 @@ def create_comment(post_id):
 @jwt_required()
 def delete_comment(comment_id):
     """删除评论（仅作者本人或管理员）"""
-    comment = Comment.query.get_or_404(comment_id, description=f'评论 #{comment_id} 不存在')
+    comment = db.get_or_404(Comment, comment_id, description=f'评论 #{comment_id} 不存在')
     current_user = db.session.get(User, int(get_jwt_identity()))
     if current_user is None or (current_user.id != comment.user_id and not current_user.is_admin):
         return jsonify({'error': '没有权限删除该评论。'}), 403

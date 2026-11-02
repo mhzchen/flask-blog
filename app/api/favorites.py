@@ -40,7 +40,7 @@ def list_favorites():
 @jwt_required()
 def toggle_favorite(post_id):
     """切换收藏状态：未收藏则收藏，已收藏则取消"""
-    post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     user_id = int(get_jwt_identity())
 
     is_faved = db.session.query(favorites).filter(

@@ -131,7 +131,7 @@ def list_posts():
 @jwt_required(optional=True)
 def get_post(post_id):
     """文章详情（异步记录浏览量，附带当前用户点赞状态）"""
-    post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     enqueue(record_post_view, post_id)
     data = post.to_dict(include_content=True)
     user_id = get_jwt_identity()
@@ -145,7 +145,7 @@ def get_post(post_id):
 @jwt_required()
 def toggle_like(post_id):
     """切换点赞：未赞则赞，已赞则取消"""
-    post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
+    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     user_id = int(get_jwt_identity())
     is_liked = db.session.query(post_likes).filter(
         post_likes.c.user_id == user_id, post_likes.c.post_id == post.id

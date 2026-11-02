@@ -90,14 +90,14 @@ def test_delete_comment_by_author(client, app, post, user_headers, normal_user):
     c = _add_comment(post, normal_user, '自己的评论')
     resp = client.delete(f'/api/comments/{c.id}', headers=user_headers)
     assert resp.status_code == 200
-    assert Comment.query.get(c.id) is None
+    assert db.session.get(Comment, c.id) is None
 
 
 def test_delete_comment_by_admin(client, app, post, admin_headers, normal_user):
     c = _add_comment(post, normal_user, 'alice 的评论')
     resp = client.delete(f'/api/comments/{c.id}', headers=admin_headers)
     assert resp.status_code == 200
-    assert Comment.query.get(c.id) is None
+    assert db.session.get(Comment, c.id) is None
 
 
 def test_delete_comment_not_found(client, user_headers):
