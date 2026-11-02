@@ -124,15 +124,32 @@ class PostService:
                 import json
                 hit = client.get(key)
                 if hit is not None:
+                    if hit == _NEGATIVE:
+                        raise ServiceError('文章不存在。', 404)
                     return dict(json.loads(hit))
+            except ServiceError:
+                raise  # 业务 404 不被吞，继续向上抛
             except Exception:
                 pass
-        post = post_repo.get_by_id_or_404(post_id)
+        post = post_repo.get(post_id)
+        if post is None:
+            # 防穿透：不存在的文章也写短 TTL 空标记，避免恶意/误请求反复打 DB
+            if client is not None and app.config.get("CACHE_ENABLED", True):
+                try:
+                    import json
+                    client.setex(key, app.config.get("CACHE_NEGATIVE_TIMEOUT", 30), _NEGATIVE)
+                except Exception:
+                    pass
+            raise ServiceError('文章不存在。', 404)
         data = post.to_dict(include_content=True)
         if client is not None and app.config.get("CACHE_ENABLED", True):
             try:
                 import json
-                client.setex(key, 60, json.dumps(data, ensure_ascii=False))
+                import random
+                base = app.config.get("CACHE_DETAIL_TIMEOUT", 60)
+                # 防雪崩：TTL 加 ±20% 随机抖动
+                ttl = int(base * (0.8 + random.random() * 0.4))
+                client.setex(key, ttl, json.dumps(data, ensure_ascii=False))
             except Exception:
                 pass
         return dict(data)
@@ -285,6 +302,10 @@ class AdminPostService:
         db_commit()
         invalidate("posts")
         invalidate("post_detail")
+
+
+# 防穿透空标记：缓存里表示文章不存在，命中即抛 404，不反复打 DB
+_NEGATIVE = 'null'
 
 
 # ============================ 工具函数 ============================

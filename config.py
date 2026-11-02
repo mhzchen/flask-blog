@@ -42,6 +42,10 @@ class Config:
     CACHE_ENABLED = os.environ.get('CACHE_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     CACHE_REDIS_URL = os.environ.get('CACHE_REDIS_URL', 'redis://localhost:6379/0')
     CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 60))
+    # 详情缓存 TTL 基数；防雪崩会在 base ±20% 随机抖动
+    CACHE_DETAIL_TIMEOUT = int(os.environ.get('CACHE_DETAIL_TIMEOUT', 60))
+    # 防穿透：不存在的资源（如不存在的文章 id）也写短 TTL 空标记缓存
+    CACHE_NEGATIVE_TIMEOUT = int(os.environ.get('CACHE_NEGATIVE_TIMEOUT', 30))
 
     # ---------- Celery 异步任务 ----------
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/1')

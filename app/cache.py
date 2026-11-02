@@ -5,6 +5,7 @@
 - 只缓存返回 200 的 JSON 响应；
 - key 由"前缀 + 请求路径 + 查询参数"组成，方便按前缀批量失效。
 """
+import random
 from functools import wraps
 
 from flask import current_app, has_request_context, request
@@ -45,7 +46,9 @@ def cached(key_prefix, timeout=None):
             if client is None:
                 return fn(*args, **kwargs)
 
-            ttl = timeout if timeout is not None else app.config.get('CACHE_DEFAULT_TIMEOUT', 60)
+            base = timeout if timeout is not None else app.config.get('CACHE_DEFAULT_TIMEOUT', 60)
+            # 防雪崩：TTL 加 ±20% 随机抖动，避免大量 key 同时过期集中打穿 DB
+            ttl = int(base * (0.8 + random.random() * 0.4))
             key = f"{key_prefix}:{request.path}?{request.query_string.decode('utf-8', 'ignore')}"
             try:
                 hit = client.get(key)
