@@ -14,9 +14,15 @@ depends_on = None
 
 
 def _has_index(index_name):
-    """MySQL 无 CREATE INDEX IF NOT EXISTS，通过 information_schema 判断索引是否已存在，保证迁移可重复执行。"""
+    """判断 posts 是否已有同名索引；按方言查询（MySQL 用 information_schema，SQLite 用 sqlite_master）。"""
     from sqlalchemy import text
     bind = op.get_bind()
+    if bind.dialect.name == 'sqlite':
+        return bind.execute(
+            text("SELECT COUNT(*) FROM sqlite_master "
+                 "WHERE type='index' AND tbl_name='posts' AND name = :i"),
+            {'i': index_name}
+        ).scalar() > 0
     return bind.execute(
         text("SELECT COUNT(*) FROM information_schema.statistics "
              "WHERE table_schema = DATABASE() AND table_name = 'posts' AND index_name = :i"),
@@ -32,7 +38,8 @@ def upgrade():
         op.create_index('ix_posts_category_id', 'posts', ['category_id'])
     if not _has_index('ix_posts_created_at'):
         op.create_index('ix_posts_created_at', 'posts', ['created_at'])
-    if not _has_index('ix_posts_content_fulltext'):
+    # FULLTEXT 是 MySQL 专属能力，SQLite 不支持；仅 MySQL 方言创建，保持迁移链跨方言可跑
+    if op.get_bind().dialect.name == 'mysql' and not _has_index('ix_posts_content_fulltext'):
         op.execute("CREATE FULLTEXT INDEX ix_posts_content_fulltext ON posts (content)")
 
 

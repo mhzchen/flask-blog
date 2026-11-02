@@ -153,7 +153,7 @@ docker compose up -d --build
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（147 项用例，覆盖率 96.11%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池）
+- 全量测试：`venv\Scripts\python -m pytest`（152 项用例，覆盖率 95.31%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池/Celery 重试/日志慢请求采样）
 - 前端：`npm run test`（Vitest 8 项：XSS 净化单测 5 + PostCard 组件测试 3）、`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ### CI 流水线（`.github/workflows/ci.yml`）
@@ -161,6 +161,7 @@ docker compose up -d --build
 - **lint-typecheck**：ruff + mypy（setup-python 自带 pip 缓存）
 - **test**：Python 3.11/3.12/3.13 矩阵跑全量 pytest（覆盖率门槛 90%），setup-python 自带 pip 缓存
 - **frontend**：setup-node + `npm ci --legacy-peer-deps`（兼容 vite5/vitest）+ `npm run test`（Vitest 8 项）+ `npm run build`（Vite 生产构建验证），npm 依赖缓存
+- **DB Migration (MySQL)**：干净 MySQL 库跑 `flask db upgrade` 建全表，并校验建出的表与模型元数据一致（防迁移/模型漂移）
 
 ## 性能优化
 
@@ -195,16 +196,19 @@ docker compose up -d --build
 - **结构化 JSON 日志**：所有应用日志（请求访问、慢查询、异常）输出为单行 JSON，含 `ts / level / logger / msg / rid / method / path / status / dur_ms / ip` 等字段，可直接接入 ELK / Datadog / 日志采集器；异常日志附带 `stack` 便于排查线上问题。
 - **请求追踪**：每个请求生成 `request_id`，随响应头 `X-Request-Id` 返回，同一请求的所有日志（含慢查询）可关联检索。
 - **健康检查**：`/health` 存活探针 + `/healthz` 就绪探针（校验数据库连通，供 Docker/K8s 使用）。
-- **慢查询日志**：单条 SQL 超过 `SLOW_QUERY_MS`（默认 200ms）自动记录 WARNING。
+- **慢查询日志**：单条 SQL 超过 `SLOW_QUERY_MS`（默认 200ms）自动记录 WARNING，并带当前 `request_id`（`rid`），可串联到具体请求定位；
+- **慢请求采样**：整请求超过 `SLOW_REQUEST_MS`（默认 1000ms）按 `SLOW_REQUEST_SAMPLE_RATE`（默认全量 1.0，高流量可调低）额外记录 `slow_request` WARNING（区别于所有请求的 INFO `req` 行），用于精准抓慢请求。
 - **Prometheus 指标**：`/metrics` 暴露 Prometheus 文本格式指标（请求量计数、延迟直方图、并发水位、进程存活），并在缓存层打点——**Redis 缓存命中/未命中/降级计数**（按缓存前缀），以及 **SQLAlchemy 连接池状态**（checkedout/checkedin/size），可直接被 Prometheus 抓取并接入 Grafana 做面板/告警；`METRICS_ENABLED` 控制开关（生产/开发默认开，测试关）。
 
 ## 数据库迁移
 
-修改 `models.py` 后（配合 Flask-Migrate 管理 MySQL 结构变更）：
+生产用 Flask-Migrate（Alembic）版本化管理 MySQL 结构，迁移链 `migrations/versions/`：0001 初始建表 → 0007 评论父级。全新库 `flask db upgrade` 建全表 + seed；已有表但无迁移记录则 `flask db stamp head` 认领。修改 `models.py` 后：
 
 ```
 flask --app wsgi db migrate -m "描述"
 flask --app wsgi db upgrade
 ```
+
+迁移已做**跨方言兼容**：全文索引（FULLTEXT + ngram）与索引存在性检查按方言处理（MySQL 用 information_schema，SQLite 用 sqlite_master；FULLTEXT 仅 MySQL 创建），保证 dev(SQLite)/prod(MySQL) 迁移链一致。CI 含独立 **DB Migration (MySQL)** job：在干净 MySQL 库跑 `flask db upgrade`，并校验建出的表与模型元数据一致（防迁移/模型漂移）。
 
 > 原「服务端渲染（Jinja2 模板 + Flask-Login session）+ SQLite」版本已由本 API + Vue3 + MySQL 版本替代。

@@ -26,6 +26,12 @@ class Config:
     # ---------- 慢查询日志 ----------
     # 单条 SQL 执行超过该毫秒数时记录 WARNING，便于定位慢查询（对应知识域：慢查询分析）
     SLOW_QUERY_MS = int(os.environ.get('SLOW_QUERY_MS', 200))
+    # ---------- 慢请求采样 ----------
+    # 整请求耗时超过该毫秒数时，按采样率额外记录 WARNING（区别于全部请求的 INFO req 行，
+    # 用于在生产里精准抓慢请求，且与慢 SQL 一样带上 request_id 可串联排查）
+    SLOW_REQUEST_MS = int(os.environ.get('SLOW_REQUEST_MS', 1000))
+    # 采样率 0~1：默认全量（1.0）；高流量环境可调低，避免慢请求日志洪峰
+    SLOW_REQUEST_SAMPLE_RATE = float(os.environ.get('SLOW_REQUEST_SAMPLE_RATE', 1.0))
 
     # JWT 认证配置
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key-please-change-0123456789abcdef')

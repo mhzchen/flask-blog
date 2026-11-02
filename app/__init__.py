@@ -1,10 +1,11 @@
 import json
 import logging
+import random
 import time
 import uuid
 
 from config import get_config
-from flask import Flask, g, jsonify, request
+from flask import Flask, current_app, g, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_limiter import Limiter
@@ -142,9 +143,35 @@ def _configure_logging(app):
     app.logger.setLevel(logging.INFO)
 
 
+def _current_request_id():
+    """取当前请求的 request_id；无请求上下文（如 Celery 任务内的慢查询事件）时安全返回 None。"""
+    try:
+        return getattr(g, 'request_id', None)
+    except Exception:
+        return None
+
+
+_engine_event_registered = False
+
+
+def _slow_threshold():
+    """慢查询阈值：动态读当前 app 的配置；无请求上下文时回退默认 200ms。"""
+    try:
+        return current_app.config.get('SLOW_QUERY_MS', 200)
+    except Exception:
+        return 200
+
+
 def _register_slow_query_logging(app):
-    """慢查询日志：统计每条 SQL 执行耗时，超过阈值记录 WARNING。"""
-    threshold_ms = app.config.get('SLOW_QUERY_MS', 200)
+    """慢查询日志：统计每条 SQL 执行耗时，超过阈值记录 WARNING。
+
+    Engine 监听器只注册一次（防多 app/多测试重复注册、闭包绑定错误 app）；
+    阈值运行时经 current_app 读取，保证取到实际处理请求的 app 配置。
+    """
+    global _engine_event_registered
+    if _engine_event_registered:
+        return
+    _engine_event_registered = True
 
     @event.listens_for(Engine, 'before_cursor_execute')
     def _before(conn, cursor, statement, parameters, context, executemany):
@@ -156,10 +183,11 @@ def _register_slow_query_logging(app):
         if started is None:
             return
         dur_ms = (time.perf_counter() - started) * 1000
-        if dur_ms >= threshold_ms:
+        if dur_ms >= _slow_threshold():
             sql = statement.splitlines()[0][:200] if statement else ''
             app.logger.warning(
-                'slow_query', extra={'dur_ms': round(dur_ms, 1), 'sql': sql},
+                'slow_query',
+                extra={'dur_ms': round(dur_ms, 1), 'sql': sql, 'rid': _current_request_id()},
             )
 
 
@@ -188,4 +216,18 @@ def _register_request_logging(app):
                 'ua': (request.user_agent.string[:120] if request.user_agent else None),
             },
         )
+        # 慢请求采样：整请求超阈值且命中采样率时额外记 WARNING（精准抓慢请求，供定位瓶颈）
+        slow_ms = app.config.get('SLOW_REQUEST_MS', 1000)
+        sample_rate = app.config.get('SLOW_REQUEST_SAMPLE_RATE', 1.0)
+        if duration_ms >= slow_ms and random.random() < sample_rate:
+            app.logger.warning(
+                'slow_request',
+                extra={
+                    'rid': req_id,
+                    'method': request.method,
+                    'path': request.path,
+                    'status': resp.status_code,
+                    'dur_ms': round(duration_ms, 1),
+                },
+            )
         return resp
