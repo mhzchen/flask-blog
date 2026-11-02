@@ -3,8 +3,6 @@
 任务里通过 current_app / db 访问应用状态（因为任务在应用上下文里执行）。
 """
 from flask import current_app
-from redis import Redis
-from redis.exceptions import RedisError
 
 from app.celery_app import celery
 
@@ -30,14 +28,15 @@ def send_welcome_email(user_id):
 
 @celery.task(name='tasks.record_post_view')
 def record_post_view(post_id):
-    """异步记录文章浏览量（写 Redis 计数器，避免阻塞请求）。"""
+    """异步累加文章浏览量（落库持久化，避免阻塞请求）。"""
     try:
-        client = Redis.from_url(current_app.config['CACHE_REDIS_URL'])
-        key = f'post:views:{post_id}'
-        client.incr(key)
-        client.expire(key, 86400)  # 24h 后自动过期
-    except RedisError:
-        current_app.logger.warning('浏览计数写入 Redis 失败: post=%s', post_id)
+        from app.models import db, Post
+        post = db.session.get(Post, post_id)
+        if post:
+            post.views = (post.views or 0) + 1
+            db.session.commit()
+    except Exception:
+        current_app.logger.warning('浏览计数落库失败: post=%s', post_id, exc_info=True)
     return f'views recorded for post {post_id}'
 
 

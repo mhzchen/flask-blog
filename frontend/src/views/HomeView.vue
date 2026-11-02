@@ -27,7 +27,14 @@
 
     <p class="result-info">共 {{ total }} 篇文章<template v-if="keyword">，搜索「{{ keyword }}」</template></p>
 
-    <div v-if="posts.length" class="article-grid">
+    <div v-if="loading" class="article-grid">
+      <div v-for="n in 6" :key="n" class="skeleton-card">
+        <div class="skeleton-line" style="width:70%;height:15px;"></div>
+        <div class="skeleton-line" style="width:100%;height:12px;"></div>
+        <div class="skeleton-line" style="width:55%;height:12px;"></div>
+      </div>
+    </div>
+    <div v-else-if="posts.length" class="article-grid">
       <PostCard v-for="post in posts" :key="post.id" :post="post" />
     </div>
     <p v-else class="empty-tip">没有找到匹配的文章。</p>
@@ -53,6 +60,7 @@ const route = useRoute()
 const router = useRouter()
 
 const posts = ref([])
+const loading = ref(true)
 const categories = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -65,19 +73,24 @@ const tags = ref([])
 const tagName = ref(route.query.tag || '')
 
 async function fetchData() {
-  const { data } = await api.get('/posts', {
-    params: {
-      q: keyword.value || undefined,
-      category: categorySlug.value || undefined,
-      tag: tagName.value || undefined,
-      page: page.value,
-    },
-  })
-  posts.value = data.items
-  total.value = data.total
-  pages.value = data.pages
-  hasPrev.value = data.has_prev
-  hasNext.value = data.has_next
+  loading.value = true
+  try {
+    const { data } = await api.get('/posts', {
+      params: {
+        q: keyword.value || undefined,
+        category: categorySlug.value || undefined,
+        tag: tagName.value || undefined,
+        page: page.value,
+      },
+    })
+    posts.value = data.items
+    total.value = data.total
+    pages.value = data.pages
+    hasPrev.value = data.has_prev
+    hasNext.value = data.has_next
+  } finally {
+    loading.value = false
+  }
 }
 
 async function fetchCategories() {
@@ -123,3 +136,22 @@ onMounted(() => {
   fetchData()
 })
 </script>
+
+<style scoped>
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+.skeleton-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 16px;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+.skeleton-line {
+  background: #e5e6eb;
+  border-radius: 4px;
+  margin: 12px 0;
+}
+</style>

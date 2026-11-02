@@ -69,3 +69,4 @@ def validate_body(model: type[BaseModel]):
 class CommentBody(BaseModel):
     """发表评论请求体"""
     content: str = Field(..., min_length=1, max_length=2000, description="评论内容")
+    parent_id: int | None = Field(None, gt=0, description="要回复的评论 ID（可选）")

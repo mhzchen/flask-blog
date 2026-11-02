@@ -25,16 +25,20 @@ class Category(db.Model):
 class Post(db.Model):
     """博客文章"""
     __tablename__ = 'posts'
+    __table_args__ = (
+        db.Index('ix_posts_content_fulltext', 'content', mysql_using='FULLTEXT'),
+    )
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    title = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(200), nullable=False, index=True)
     slug = db.Column(db.String(200), unique=True, nullable=False)
     summary = db.Column(db.Text, default='')
     content = db.Column(db.Text, nullable=False)
 
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    views = db.Column(db.Integer, nullable=False, default=0)
 
     def to_dict(self, include_content=False):
         """序列化为 JSON 字典。列表页可不返回正文以减小体积。"""
@@ -46,6 +50,8 @@ class Post(db.Model):
             'category_id': self.category_id,
             'category': self.category.name if self.category else None,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'views': self.views,
+            'like_count': self.likes.count(),
             'tags': [t.name for t in self.tags],
         }
         if include_content:
@@ -53,6 +59,7 @@ class Post(db.Model):
         return data
 
     tags = db.relationship('Tag', secondary='post_tags', backref='posts', lazy='select')
+    likes = db.relationship('User', secondary='post_likes', backref='liked_posts', lazy='dynamic')
 
     def __repr__(self):
         return f'<Post {self.title}>'
@@ -98,21 +105,29 @@ class Comment(db.Model):
     content = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # 关系：to_dict 里能拿到评论者用户名
     user = db.relationship('User', backref='comments')
     post = db.relationship('Post', backref='comments')
+    parent = db.relationship('Comment', remote_side=[id], backref='replies')
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_replies=False):
+        data = {
             'id': self.id,
             'content': self.content,
             'user_id': self.user_id,
             'username': self.user.username if self.user else None,
             'post_id': self.post_id,
+            'parent_id': self.parent_id,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
         }
+        if include_replies:
+            data['replies'] = [
+                r.to_dict() for r in sorted(self.replies, key=lambda x: x.created_at)
+            ]
+        return data
 
     def __repr__(self):
         return f'<Comment {self.id} on post {self.post_id}>'
@@ -122,6 +137,13 @@ class Comment(db.Model):
 post_tags = db.Table('post_tags',
                      db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
                      db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True)
+                     )
+
+# 点赞关联表：多对多（用户点赞文章）
+post_likes = db.Table('post_likes',
+                     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+                     db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
+                     db.Column('created_at', db.DateTime, default=datetime.utcnow)
                      )
 
 

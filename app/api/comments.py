@@ -22,12 +22,12 @@ def list_comments(post_id):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
 
-    pagination = (Comment.query.filter_by(post_id=post_id)
+    pagination = (Comment.query.filter_by(post_id=post_id, parent_id=None)
                   .order_by(Comment.created_at.asc())
                   .paginate(page=page, per_page=per_page, error_out=False))
 
     return jsonify({
-        'items': [c.to_dict() for c in pagination.items],
+        'items': [c.to_dict(include_replies=True) for c in pagination.items],
         'total': pagination.total,
         'page': pagination.page,
         'pages': pagination.pages,
@@ -45,8 +45,14 @@ def create_comment(post_id):
     content = body.content.strip()
     if not content:
         return jsonify({'error': '评论内容不能为空。'}), 422
+    parent_id = body.parent_id
+    if parent_id:
+        parent = Comment.query.get(parent_id)
+        if parent is None or parent.post_id != post_id:
+            return jsonify({'error': '要回复的评论不存在或不属于该文章。'}), 400
+        parent_id = parent.parent_id or parent.id
     comment = Comment(content=content, post_id=post_id,
-                      user_id=int(get_jwt_identity()))
+                      user_id=int(get_jwt_identity()), parent_id=parent_id)
     db.session.add(comment)
     db.session.commit()
     return jsonify({'comment': comment.to_dict()}), 201

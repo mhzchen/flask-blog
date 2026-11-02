@@ -155,10 +155,26 @@ PATHS = {
             },
         },
     },
+    "/api/posts/{post_id}/like": {
+        "post": {
+            "summary": "切换点赞",
+            "description": "需要登录：未点赞则点赞，已点赞则取消；返回 liked 与 like_count。",
+            "tags": ["posts"],
+            "security": [{"bearerAuth": []}],
+            "parameters": [
+                {"name": "post_id", "in": "path", "required": True, "schema": {"type": "integer"}}
+            ],
+            "responses": {
+                "200": {"description": "切换成功，返回 liked 和 like_count"},
+                "401": {"description": "未登录"},
+                "404": {"description": "文章不存在"},
+            },
+        },
+    },
     "/api/posts/{post_id}/comments": {
         "get": {
             "summary": "文章评论列表",
-            "description": "返回指定文章的评论（按时间升序，分页）。",
+            "description": "返回指定文章的顶层评论（含嵌套回复，按时间升序，分页）。",
             "tags": ["posts"],
             "parameters": [
                 {"name": "post_id", "in": "path", "required": True, "schema": {"type": "integer"}},
@@ -169,7 +185,7 @@ PATHS = {
         },
         "post": {
             "summary": "发表评论",
-            "description": "需要登录，请求体经 Pydantic 校验。",
+            "description": "需要登录，请求体经 Pydantic 校验；传 parent_id 表示回复某评论。",
             "tags": ["posts"],
             "security": [{"bearerAuth": []}],
             "requestBody": _json_body("CommentBody"),

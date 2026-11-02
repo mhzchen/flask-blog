@@ -62,6 +62,10 @@ def create_app(config_class=Config):
     # 注册 OpenAPI 规范与 Swagger UI 文档路由
     register_openapi_routes(app)
 
+    @app.get('/health')
+    def health():
+        return {'status': 'ok'}
+
     return app
 
 

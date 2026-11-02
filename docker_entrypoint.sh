@@ -57,4 +57,4 @@ else
 fi
 
 echo "==> 启动 gunicorn (0.0.0.0:8000) ..."
-exec gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 60 wsgi:app
+exec gunicorn --bind 0.0.0.0:8000 --workers 4 --threads 2 --timeout 60 --graceful-timeout 30 --access-logfile - wsgi:app
