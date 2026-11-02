@@ -1,6 +1,7 @@
 import os
 
 from dotenv import load_dotenv
+from sqlalchemy.pool import StaticPool
 
 # 从 .env 文件加载环境变量（仅开发环境使用）
 load_dotenv()
@@ -60,13 +61,42 @@ class DevelopmentConfig(Config):
     DEBUG = True
 
 
+class TestingConfig(Config):
+    # 测试专用配置：内存 SQLite + eager 同步任务 + 关闭缓存/限流
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite://'
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'poolclass': StaticPool,
+        'connect_args': {'check_same_thread': False},
+    }
+    SECRET_KEY = 'test-secret-key-0123456789abcdef'
+    JWT_SECRET_KEY = 'test-jwt-secret-key-0123456789abcdef'
+    JWT_ACCESS_TOKEN_EXPIRES = 3600
+    CORS_ORIGINS = '*'
+    CACHE_ENABLED = False
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
+    RATELIMIT_ENABLED = False
+
+
 class ProductionConfig(Config):
     DEBUG = False
 
 
-# 根据环境变量选择配置
+# 根据环境变量选择配置；显式传入配置类优先级最高
 config_map = {
     'development': DevelopmentConfig,
+    'testing': TestingConfig,
     'production': ProductionConfig,
     'default': DevelopmentConfig,
 }
+
+
+def get_config(env=None):
+    # 按环境名取配置类。优先级：显式参数 > FLASK_ENV 环境变量 > 默认开发
+    import os
+    if env is None:
+        env = os.environ.get('FLASK_ENV', 'development')
+    return config_map.get(env, config_map['default'])

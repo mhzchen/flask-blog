@@ -7,14 +7,14 @@ from flask_jwt_extended import (
 )
 
 from app import limiter
-from app.models import User, db
 from app.schemas import LoginBody, RegisterBody, validate_body
+from app.services import ServiceError, auth_service
 from app.tasks import enqueue, send_welcome_email
 
-auth_bp = Blueprint('auth', __name__)
+auth_bp = Blueprint("auth", __name__)
 
 
-@auth_bp.post('/register')
+@auth_bp.post("/register")
 @limiter.limit("5 per minute")
 @validate_body(RegisterBody)
 def register():
@@ -24,20 +24,10 @@ def register():
     校验通过后创建用户、返回 token，并异步发送欢迎邮件。
     """
     body = g.validated
-    username = body.username.strip()
-    email = body.email
-    password = body.password
-
-    # 业务校验：用户名/邮箱是否已存在
-    if User.query.filter_by(username=username).first():
-        return jsonify({'error': '用户名已被使用。'}), 409
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': '邮箱已被注册。'}), 409
-
-    user = User(username=username, email=email)
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
+    try:
+        user = auth_service.register(body.username.strip(), body.email, body.password)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
 
     # 异步发送欢迎邮件（broker 不可用时不影响注册）
     enqueue(send_welcome_email, user.id)
@@ -45,42 +35,43 @@ def register():
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
     return jsonify({
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'user': user.to_dict(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": user.to_dict(),
     }), 201
 
 
-@auth_bp.post('/login')
+@auth_bp.post("/login")
 @limiter.limit("10 per minute")
 @validate_body(LoginBody)
 def login():
     """用户登录：用户名 + 密码，成功返回 token。"""
     body = g.validated
-    user = User.query.filter_by(username=body.username.strip()).first()
-    if user is None or not user.check_password(body.password):
-        return jsonify({'error': '用户名或密码错误。'}), 401
+    user = auth_service.login(body.username.strip(), body.password)
+    if user is None:
+        return jsonify({"error": "用户名或密码错误。"}), 401
 
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
     return jsonify({
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'user': user.to_dict(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": user.to_dict(),
     })
 
 
-@auth_bp.get('/me')
+@auth_bp.get("/me")
 @jwt_required()
 def me():
     """返回当前登录用户信息"""
-    user = db.session.get(User, int(get_jwt_identity()))
-    if user is None:
-        return jsonify({'error': '用户不存在。'}), 404
-    return jsonify({'user': user.to_dict()})
+    try:
+        user = auth_service.get_or_404(int(get_jwt_identity()))
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"user": user.to_dict()})
 
 
-@auth_bp.post('/refresh')
+@auth_bp.post("/refresh")
 @limiter.limit("30 per minute")
 @jwt_required(refresh=True)
 def refresh():
@@ -88,8 +79,9 @@ def refresh():
 
     refresh token 有效期较长（默认 7 天），仅用于换 access，不直接访问业务接口。
     """
-    user = db.session.get(User, int(get_jwt_identity()))
-    if user is None:
-        return jsonify({'error': '用户不存在。'}), 404
+    try:
+        user = auth_service.get_or_404(int(get_jwt_identity()))
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
     new_access = create_access_token(identity=str(user.id))
-    return jsonify({'access_token': new_access})
+    return jsonify({"access_token": new_access})

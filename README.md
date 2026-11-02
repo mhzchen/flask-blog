@@ -31,7 +31,9 @@ flask-blog/
 │   │   └── views/           # Home / PostDetail / Login / Register / Favorites / Admin
 │   ├── vite.config.js       # 开发代理 /api → localhost:5000
 │   └── package.json
-├── config.py                # 配置类（dev / prod）+ JWT / CORS / 数据库
+├── config.py                # 多环境配置（dev / test / prod）+ JWT / CORS / 数据库
+│   ├── app/repositories.py  # 仓储层：数据库访问原语
+│   ├── app/services.py      # 服务层：业务规则与组装
 ├── wsgi.py                  # 后端入口
 ├── seed.py                  # 初始化 MySQL 数据库 + 测试数据
 ├── requirements.txt
@@ -110,7 +112,7 @@ npm run build                  # 产物输出到 frontend/dist/
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（92 项用例，覆盖率 97.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化）
+- 全量测试：`venv\Scripts\python -m pytest`（123 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测）
 - 前端：`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ## 性能优化

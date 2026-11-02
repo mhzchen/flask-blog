@@ -21,7 +21,7 @@ jobs:
       - name: Ruff 代码规范检查
         run: ruff check app tests scripts wsgi.py config.py seed.py celery_worker.py
       - name: mypy 类型检查（核心纯逻辑模块）
-        run: mypy app/sanitize.py
+        run: mypy app/sanitize.py app/services.py
 
   test:
     name: Test (Python ${{ matrix.python-version }})

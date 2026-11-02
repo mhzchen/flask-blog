@@ -7,32 +7,7 @@
 import pytest
 from app import create_app, db
 from app.models import Category, Post, User
-from sqlalchemy.pool import StaticPool
-
-
-class TestConfig:
-    """测试专用配置：覆盖默认配置，改用内存 SQLite，禁用缓存与异步 broker"""
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite://'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'poolclass': StaticPool,
-        'connect_args': {'check_same_thread': False},
-    }
-    SECRET_KEY = 'test-secret-key-0123456789abcdef'
-    JWT_SECRET_KEY = 'test-jwt-secret-key-0123456789abcdef'
-    JWT_ACCESS_TOKEN_EXPIRES = 3600
-    CORS_ORIGINS = '*'
-
-    # 测试不需要 Redis：关掉缓存，Celery 走 eager 同步执行
-    CACHE_ENABLED = False
-    CACHE_REDIS_URL = 'redis://localhost:6379/0'
-    CELERY_TASK_ALWAYS_EAGER = True
-    CELERY_TASK_EAGER_PROPAGATES = True
-    CELERY_BROKER_URL = 'memory://'
-    CELERY_RESULT_BACKEND = 'cache+memory://'
-    # 测试默认关闭限流，避免现有用例互相干扰；限流行为单独在 test_ratelimit 里验证
-    RATELIMIT_ENABLED = False
+from config import TestingConfig
 
 
 @pytest.fixture()
@@ -41,7 +16,7 @@ def app():
 
     上下文在整个测试期间保持打开，yield 结束后统一清库。
     """
-    application = create_app(TestConfig)
+    application = create_app(TestingConfig)
     with application.app_context():
         db.create_all()
         yield application

@@ -2,15 +2,15 @@ from functools import wraps
 
 from flask import Blueprint, g, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import func
-from sqlalchemy.orm import joinedload, selectinload
 
-from app.cache import invalidate
-from app.models import Category, Post, Tag, User, db, post_likes
-from app.sanitize import sanitize_html
 from app.schemas import CategoryBody, PostBody, validate_body
+from app.services import (
+    ServiceError,
+    admin_post_service,
+    category_service,
+)
 
-admin_bp = Blueprint('admin', __name__)
+admin_bp = Blueprint("admin", __name__)
 
 
 def admin_required(fn):
@@ -18,157 +18,102 @@ def admin_required(fn):
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
-        user = db.session.get(User, int(get_jwt_identity()))
-        if user is None or not user.is_admin:
-            return jsonify({'error': '需要管理员权限。'}), 403
+        try:
+            admin_post_service.require_admin(int(get_jwt_identity()))
+        except ServiceError as e:
+            return jsonify({"error": e.message}), e.status_code
         return fn(*args, **kwargs)
     return wrapper
 
 
 # ---------- 文章管理 ----------
 
-@admin_bp.get('/posts')
+@admin_bp.get("/posts")
 @admin_required
 def list_posts():
     """后台文章列表（含正文，按时间倒序）"""
-    posts = Post.query.order_by(Post.created_at.desc()).options(
-        joinedload(Post.category),
-        selectinload(Post.tags),
-    ).all()
-
-    # 批量计算点赞数，避免逐条 N+1
-    ids = [p.id for p in posts]
-    like_map = {}
-    if ids:
-        rows = db.session.query(post_likes.c.post_id, func.count()).filter(
-            post_likes.c.post_id.in_(ids)
-        ).group_by(post_likes.c.post_id).all()
-        like_map = {post_id: cnt for post_id, cnt in rows}
-
-    return jsonify({'items': [p.to_dict(include_content=True, like_count=like_map.get(p.id, 0)) for p in posts]})
+    posts, like_map = admin_post_service.list()
+    return jsonify({
+        "items": [p.to_dict(include_content=True, like_count=like_map.get(p.id, 0))
+                  for p in posts]
+    })
 
 
-@admin_bp.post('/posts')
+@admin_bp.post("/posts")
 @admin_required
 @validate_body(PostBody)
 def create_post():
     """创建文章（请求体经 Pydantic 校验，创建后失效文章列表缓存）"""
     body = g.validated
-    category = db.session.get(Category, int(body.category_id))
-    if category is None:
-        return jsonify({'error': '分类不存在。'}), 400
-
-    slug = _make_slug(body.title)
-    # XSS 防护：内容净化后再入库，剔除脚本/事件属性等危险 HTML
-    post = Post(title=body.title, slug=slug, summary=body.summary,
-                content=sanitize_html(body.content), category_id=category.id)
-    db.session.add(post)
-    _sync_tags(post, body.tags)
-    db.session.commit()
-
-    invalidate('posts')
-    return jsonify({'post': post.to_dict(include_content=True)}), 201
+    try:
+        post = admin_post_service.create(
+            body.title, body.summary, body.content,
+            int(body.category_id), body.tags)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"post": post.to_dict(include_content=True)}), 201
 
 
-@admin_bp.put('/posts/<int:post_id>')
+@admin_bp.put("/posts/<int:post_id>")
 @admin_required
 @validate_body(PostBody)
 def update_post(post_id):
     """更新文章（请求体经 Pydantic 校验，更新后失效文章列表缓存）"""
-    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
     body = g.validated
-    category = db.session.get(Category, int(body.category_id))
-    if category is None:
-        return jsonify({'error': '分类不存在。'}), 400
-
-    post.title = body.title
-    post.summary = body.summary
-    post.content = sanitize_html(body.content)
-    post.category_id = category.id
-    _sync_tags(post, body.tags)
-    db.session.commit()
-
-    invalidate('posts')
-    return jsonify({'post': post.to_dict(include_content=True)})
+    try:
+        post = admin_post_service.update(
+            post_id, body.title, body.summary, body.content,
+            int(body.category_id), body.tags)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"post": post.to_dict(include_content=True)})
 
 
-@admin_bp.delete('/posts/<int:post_id>')
+@admin_bp.delete("/posts/<int:post_id>")
 @admin_required
 def delete_post(post_id):
     """删除文章（删除后失效文章列表缓存）"""
-    post = db.get_or_404(Post, post_id, description=f'文章 #{post_id} 不存在')
-    db.session.delete(post)
-    db.session.commit()
-
-    invalidate('posts')
-    return jsonify({'message': '文章已删除。'})
+    try:
+        admin_post_service.delete(post_id)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"message": "文章已删除。"})
 
 
 # ---------- 分类管理 ----------
 
-@admin_bp.post('/categories')
+@admin_bp.post("/categories")
 @admin_required
 @validate_body(CategoryBody)
 def create_category():
     """创建分类（请求体经 Pydantic 校验，创建后失效分类缓存）"""
     body = g.validated
-    name = body.name.strip()
-    slug = body.slug.strip() or _make_slug(name)
-    if Category.query.filter_by(slug=slug).first():
-        return jsonify({'error': 'slug 已存在。'}), 409
-    cat = Category(name=name, slug=slug)
-    db.session.add(cat)
-    db.session.commit()
-
-    invalidate('categories')
-    return jsonify({'category': cat.to_dict()}), 201
+    try:
+        cat = category_service.create(body.name, body.slug)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"category": cat.to_dict()}), 201
 
 
-@admin_bp.put('/categories/<int:cat_id>')
+@admin_bp.put("/categories/<int:cat_id>")
 @admin_required
 @validate_body(CategoryBody)
 def update_category(cat_id):
     """更新分类（请求体经 Pydantic 校验，更新后失效分类缓存）"""
-    cat = db.get_or_404(Category, cat_id)
     body = g.validated
-    name = body.name.strip()
-    slug = body.slug.strip()
-    cat.name = name
-    if slug:
-        cat.slug = slug
-    db.session.commit()
-
-    invalidate('categories')
-    return jsonify({'category': cat.to_dict()})
+    try:
+        cat = category_service.update(cat_id, body.name, body.slug)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"category": cat.to_dict()})
 
 
-@admin_bp.delete('/categories/<int:cat_id>')
+@admin_bp.delete("/categories/<int:cat_id>")
 @admin_required
 def delete_category(cat_id):
     """删除分类（删除后失效分类缓存）"""
-    cat = db.get_or_404(Category, cat_id)
-    db.session.delete(cat)
-    db.session.commit()
-
-    invalidate('categories')
-    return jsonify({'message': '分类已删除。'})
-
-
-
-
-def _sync_tags(post, tag_names):
-    """把标签名列表同步到文章的标签集合（按需创建 Tag，去重、去空白）。"""
-    post.tags = []
-    for name in dict.fromkeys(t.strip() for t in (tag_names or []) if t.strip()):
-        tag = Tag.query.filter_by(name=name).first()
-        if tag is None:
-            tag = Tag(name=name)
-            db.session.add(tag)
-        post.tags.append(tag)
-
-def _make_slug(text):
-    """生成一个带时间戳的唯一 slug，避免与已有标题冲突"""
-    import hashlib
-    base = text[:20]
-    h = hashlib.md5(f'{text}{__import__("time").time()}'.encode()).hexdigest()[:6]
-    return f'{base}-{h}'
+    try:
+        category_service.delete(cat_id)
+    except ServiceError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"message": "分类已删除。"})

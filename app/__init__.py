@@ -10,7 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
-from config import Config
+from config import Config, get_config
 from app.celery_app import init_celery
 from app.openapi import register_openapi_routes
 from app.errors import register_error_handlers
@@ -23,8 +23,18 @@ migrate = Migrate()
 jwt = JWTManager()
 
 
-def create_app(config_class=Config):
-    """应用工厂：根据配置类创建 Flask 应用实例"""
+def create_app(config_class=None):
+    """应用工厂：创建 Flask 应用实例。
+
+    支持三种方式指定配置（优先级从高到低）：
+      1. 直接传配置类：create_app(TestingConfig)
+      2. 传环境名（str）：create_app('testing') / create_app('production')
+      3. 不传：读 FLASK_ENV 环境变量，默认 development
+    """
+    if config_class is None:
+        config_class = get_config()          # 走 FLASK_ENV / 默认开发
+    elif isinstance(config_class, str):
+        config_class = get_config(config_class)  # 环境名 -> 配置类
     app = Flask(__name__)
     app.config.from_object(config_class)
     _configure_logging(app)

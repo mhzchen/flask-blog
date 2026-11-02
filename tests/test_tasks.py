@@ -47,7 +47,7 @@ def test_broker_reachable_returns_false_when_down(app, monkeypatch):
 
 def test_enqueue_degrades_to_sync_when_broker_down(app, monkeypatch):
     """broker 不可达且非 eager 时，enqueue 降级为同步执行任务本体。"""
-    from app.tasks import enqueue, _broker_reachable
+    from app.tasks import enqueue
     monkeypatch.setattr('app.tasks.celery.conf', {'task_always_eager': False})
     monkeypatch.setattr('app.tasks._broker_reachable', lambda timeout=1.0: False)
     class FakeTask:
