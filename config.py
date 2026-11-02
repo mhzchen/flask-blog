@@ -61,6 +61,10 @@ class Config:
     LOGIN_MAX_FAILURES = int(os.environ.get('LOGIN_MAX_FAILURES', 5))
     LOGIN_LOCKOUT_SECONDS = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', 300))
 
+    # ---------- 可观测性指标 ----------
+    # Prometheus 指标端点 /metrics 开关（生产/开发默认开，测试关）
+    METRICS_ENABLED = os.environ.get('METRICS_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
+
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流
@@ -90,6 +94,7 @@ class TestingConfig(Config):
     CELERY_RESULT_BACKEND = 'cache+memory://'
     RATELIMIT_ENABLED = False
     SECURITY_HEADERS_ENABLED = False
+    METRICS_ENABLED = False
 
 
 class ProductionConfig(Config):

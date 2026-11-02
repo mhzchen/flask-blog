@@ -16,6 +16,7 @@ from sqlalchemy.engine import Engine
 
 from app.celery_app import init_celery
 from app.errors import register_error_handlers
+from app.metrics import register_metrics
 from app.openapi import register_openapi_routes
 from app.security import register_security_headers
 
@@ -82,6 +83,9 @@ def create_app(config_class=None):
 
     # 注册 OpenAPI 规范与 Swagger UI 文档路由
     register_openapi_routes(app)
+
+    # 注册 Prometheus 指标端点 /metrics（可观测性）
+    register_metrics(app)
 
     @app.get('/health')
     def health():

@@ -116,7 +116,7 @@ class PostService:
         from flask import current_app
 
         from app.cache import _client
-        app = current_app._get_current_object()
+        app = current_app
         client = _client(app)
         key = f"post_detail:{post_id}"
         if client is not None and app.config.get("CACHE_ENABLED", True):
@@ -124,7 +124,7 @@ class PostService:
                 import json
                 hit = client.get(key)
                 if hit is not None:
-                    return json.loads(hit)
+                    return dict(json.loads(hit))
             except Exception:
                 pass
         post = post_repo.get_by_id_or_404(post_id)
@@ -135,7 +135,7 @@ class PostService:
                 client.setex(key, 60, json.dumps(data, ensure_ascii=False))
             except Exception:
                 pass
-        return data
+        return dict(data)
 
     def is_liked(self, user_id: int, post_id: int) -> bool:
         return post_repo.is_liked(user_id, post_id)
