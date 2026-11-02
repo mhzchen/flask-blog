@@ -132,6 +132,8 @@ docker compose up -d --build
 
 访问：
 - 前端：**http://localhost:8080/**（nginx 提供静态页 + 反向代理 `/api` → backend:8000）
+- Swagger UI 交互文档：**http://localhost:8000/swagger**（12 个 REST 接口，含 JWT 认证可在线调试）
+- OpenAPI 规范：**http://localhost:8000/openapi.json**（`/swagger` 的数据源）
 - 后端健康检查：**http://localhost:8000/health**
 
 ### 5. 缓存与部署验证（实测）
@@ -147,7 +149,7 @@ docker compose up -d --build
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
 - 全量测试：`venv\Scripts\python -m pytest`（134 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存）
-- 前端：`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
+- 前端：`npm run test`（Vitest 8 项：XSS 净化单测 5 + PostCard 组件测试 3）、`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ## 性能优化
 

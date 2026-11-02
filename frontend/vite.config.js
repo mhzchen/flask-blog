@@ -3,6 +3,11 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    include: ['tests/**/*.test.js'],
+  },
   server: {
     port: 5173,
     // 开发时把 /api 请求代理到 Flask 后端，避免跨域
