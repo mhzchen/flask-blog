@@ -13,7 +13,7 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True}
 
     # JWT 认证配置
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key')
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key-please-change-0123456789abcdef')
     JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_EXPIRES', 86400))  # 秒
     # 允许跨域的来源（Vue 开发服务器）
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173')
