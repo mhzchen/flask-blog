@@ -8,12 +8,16 @@ test.describe('博客 E2E', () => {
     expect(await cards.count()).toBeGreaterThan(0)
   })
 
-  test('文章详情显示浏览量与点赞按钮', async ({ page }) => {
-    await page.goto('/')
+  test('文章详情：登录后显示浏览量与点赞按钮', async ({ page }) => {
+    await page.goto('/login')
+    await page.locator('input[type="text"]').fill('runoob')
+    await page.locator('input[type="password"]').fill('123456')
+    await page.locator('button.btn-submit').click()
+    await expect(page).toHaveURL(/\/$/, { timeout: 20000 })
     await page.locator('.card-link').first().click()
     await page.waitForURL(/\/post\//)
     await expect(page.locator('.like-btn')).toBeVisible({ timeout: 20000 })
-    await expect(page).toContainText('阅读')
+    await expect(page.locator('body')).toContainText('阅读')
   })
 
   test('登录后回到首页', async ({ page }) => {

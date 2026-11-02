@@ -11,5 +11,5 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [{ name: 'msedge', use: { browserName: 'chromium', channel: 'msedge' } }],
 })
