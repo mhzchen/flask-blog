@@ -61,16 +61,28 @@ def send_welcome_email(user_id):
     return f'welcome email sent to {user.email}'
 
 
-@celery.task(name='tasks.record_post_view')
-def record_post_view(post_id):
-    """异步累加文章浏览量（落库持久化，避免阻塞请求）。"""
+@celery.task(name='tasks.record_post_view', bind=True, max_retries=3)
+def record_post_view(self, post_id):
+    """异步累加文章浏览量（落库持久化，避免阻塞请求）。
+
+    可靠性：DB 瞬时连接错误（OperationalError）按指数退避自动重试（2/4/8s，最多 3 次），
+    避免一次连接抖动就丢失浏览计数；永久错误（数据/逻辑问题）记日志丢弃，不无限重试。
+    """
+    from sqlalchemy.exc import OperationalError
+    from app.models import Post, db
     try:
-        from app.models import Post, db
         post = db.session.get(Post, post_id)
         if post:
             post.views = (post.views or 0) + 1
             db.session.commit()
+    except OperationalError as exc:
+        # 瞬时连接错误：回滚后指数退避重试（countdown = 2 ^ retries）
+        db.session.rollback()
+        current_app.logger.warning('浏览计数落库瞬时错误，重试 %s/%s: post=%s',
+                                   self.request.retries + 1, self.max_retries, post_id)
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
     except Exception:
+        db.session.rollback()
         current_app.logger.warning('浏览计数落库失败: post=%s', post_id, exc_info=True)
     return f'views recorded for post {post_id}'
 

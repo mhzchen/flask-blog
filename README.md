@@ -145,7 +145,7 @@ docker compose up -d --build
 
 - **缓存命中**：`GET /api/posts` 首次 ~570ms，Redis 命中后 ~12ms（约 50 倍）；
 - **缓存失效**：管理员创建文章后，`posts:*` 缓存 key 立即清除（`invalidate` 生效），下次请求回源 DB；
-- **异步链路**：访问文章详情触发 `record_post_view` 任务，Celery worker 消费后浏览量落库（`views` +1），不阻塞请求；
+- **异步链路**：访问文章详情触发 `record_post_view` 任务，Celery worker 消费后浏览量落库（`views` +1），不阻塞请求；DB 瞬时连接错误按指数退避自动重试（2/4/8s，最多 3 次），永久错误记日志丢弃；任务全局超时保护（硬 60s/软 50s）；broker 不可达自动降级为同步执行，功能不丢；
 - **限流**：`RATELIMIT_STORAGE_URI` 指向 Redis（`redis://redis:6379/2`）；
 - **防雪崩**：所有缓存 TTL 加 ±20% 随机抖动（`CACHE_DETAIL_TIMEOUT` 基数），避免大量 key 同时过期集中打穿 DB；
 - **防穿透**：不存在的文章 id 也会写短 TTL 空标记（`CACHE_NEGATIVE_TIMEOUT`，默认 30s），命中即 404 且不再打 DB，恶意/误请求不拖垮数据库。

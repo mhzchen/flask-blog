@@ -19,10 +19,12 @@ def test_send_welcome_email_missing_user(app):
         assert send_welcome_email.run(99999) == 'user 99999 not found'
 
 
-def test_record_post_view_degrades_without_redis(app):
-    # 测试环境没有 Redis，走降级分支，不抛错
+def test_record_post_view_degrades_without_redis(app, monkeypatch):
+    # 测试环境没有 Redis，走降级分支，不抛错；mock DB 避免空库 get 触发重试
     from app.tasks import record_post_view
+    from app.models import db
     with app.app_context():
+        _stub_post_get(db, monkeypatch)
         assert record_post_view(1) == 'views recorded for post 1'
 
 
@@ -69,3 +71,65 @@ def test_enqueue_eager_runs_sync(app, monkeypatch):
     with app.app_context():
         assert enqueue(FakeTask()) == 'eager-sync'
 
+
+
+class _FakePost:
+    """带 views 属性的假文章对象，避免测试依赖真实 DB schema 状态。"""
+    def __init__(self):
+        self.views = 0
+
+
+def _stub_post_get(db, monkeypatch):
+    """mock db.session.get 返回一个假文章，完全不碰真实数据库。"""
+    fake = _FakePost()
+    monkeypatch.setattr(db.session, "get", lambda *a, **k: fake)
+    return fake
+
+
+def test_record_post_view_retries_on_db_error(app, monkeypatch):
+    """DB 瞬时连接错误应触发指数退避重试（self.retry），而非直接丢弃。"""
+    from app import tasks
+    from sqlalchemy.exc import OperationalError
+    from app.models import db
+
+    with app.app_context():
+        _stub_post_get(db, monkeypatch)
+
+        def boom():
+            raise OperationalError("SELECT", {}, Exception("conn lost"))
+        monkeypatch.setattr(db.session, "commit", boom)
+        retry_called = {"n": 0}
+
+        def fake_retry(exc=None, **kwargs):
+            retry_called["n"] += 1
+            # 模拟 Celery 抛出 Retry 终止当前执行（真实环境下重试会重新投递）
+            raise RuntimeError("retry-issued")
+
+        monkeypatch.setattr(tasks.record_post_view, "retry", fake_retry)
+        try:
+            tasks.record_post_view(999)
+        except RuntimeError:
+            pass
+        assert retry_called["n"] == 1  # 瞬时错误触发了一次重试
+
+
+def test_record_post_view_no_retry_on_logic_error(app, monkeypatch):
+    """永久错误（非连接类）不重试，直接记日志丢弃（避免无限重试）。"""
+    from app import tasks
+    from app.models import db
+
+    with app.app_context():
+        _stub_post_get(db, monkeypatch)
+
+        def boom():
+            raise ValueError("logic bug")
+        monkeypatch.setattr(db.session, "commit", boom)
+        retry_called = {"n": 0}
+
+        def fake_retry(exc=None, **kwargs):
+            retry_called["n"] += 1
+            raise RuntimeError("retry-issued")
+
+        monkeypatch.setattr(tasks.record_post_view, "retry", fake_retry)
+        tasks.record_post_view(999)
+        assert retry_called["n"] == 0  # 永久错误不重试

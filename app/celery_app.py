@@ -22,6 +22,9 @@ def init_celery(app):
         timezone='Asia/Shanghai',
         enable_utc=True,
         task_track_started=True,
+        # 任务执行超时保护：硬超时 60s 杀掉，软超时 50s 告警，避免任务 hang 占用 worker
+        task_time_limit=60,
+        task_soft_time_limit=50,
         # Redis/broker 不可用时快速失败（避免每个请求被连接重试阻塞数十秒）
         broker_connection_retry=False,
         broker_connection_retry_on_startup=False,
