@@ -14,8 +14,7 @@ htmlcov/
 # 临时验证/调试文件（会话遗留）
 __*.py
 __*.txt
-flask_out.log
-flask_err.log
+*.log
 
 # 前端 e2e 报告
 frontend/test-results/

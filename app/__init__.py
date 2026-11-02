@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 import uuid
@@ -90,12 +91,34 @@ def create_app(config_class=Config):
     return app
 
 
+class _JsonFormatter(logging.Formatter):
+    """结构化日志：每条日志输出为单行 JSON，便于接入 ELK / 日志采集。
+
+    record 上的 extra 字段（如 rid、dur_ms）会合并进 JSON 顶层；
+    异常日志附带 stack（生产排查线上问题依赖它）。
+    """
+
+    def format(self, record):
+        entry = {
+            'ts': self.formatTime(record, '%Y-%m-%dT%H:%M:%S%z'),
+            'level': record.levelname,
+            'logger': record.name,
+            'msg': record.getMessage(),
+        }
+        # 把调用方通过 extra 注入的自定义字段合并进顶层
+        for key in ('rid', 'method', 'path', 'status', 'dur_ms', 'ip', 'ua', 'sql'):
+            val = getattr(record, key, None)
+            if val is not None:
+                entry[key] = val
+        if record.exc_info:
+            entry['stack'] = self.formatException(record.exc_info)
+        return json.dumps(entry, ensure_ascii=False)
+
+
 def _configure_logging(app):
-    """统一日志格式：时间 级别 模块: 消息。"""
+    """统一日志：输出为 JSON 结构化日志（一行一条，可被日志采集器直接解析）。"""
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s %(name)s: %(message)s'
-    ))
+    handler.setFormatter(_JsonFormatter())
     app.logger.handlers = [handler]
     app.logger.setLevel(logging.INFO)
 
@@ -117,7 +140,7 @@ def _register_slow_query_logging(app):
         if dur_ms >= threshold_ms:
             sql = statement.splitlines()[0][:200] if statement else ''
             app.logger.warning(
-                'slow_query dur_ms=%.1f sql=%s', dur_ms, sql,
+                'slow_query', extra={'dur_ms': round(dur_ms, 1), 'sql': sql},
             )
 
 
@@ -135,8 +158,15 @@ def _register_request_logging(app):
         req_id = getattr(g, 'request_id', '-')
         resp.headers['X-Request-Id'] = req_id
         app.logger.info(
-            'req method=%s path=%s status=%s dur_ms=%.1f rid=%s ip=%s',
-            request.method, request.path, resp.status_code, duration_ms, req_id,
-            request.remote_addr,
+            'req',
+            extra={
+                'rid': req_id,
+                'method': request.method,
+                'path': request.path,
+                'status': resp.status_code,
+                'dur_ms': round(duration_ms, 1),
+                'ip': request.remote_addr,
+                'ua': (request.user_agent.string[:120] if request.user_agent else None),
+            },
         )
         return resp

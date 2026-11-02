@@ -118,6 +118,13 @@ npm run build                  # 产物输出到 frontend/dist/
 - **杜绝 N+1**：文章列表/收藏列表/后台列表接口通过 `joinedload(Post.category)` + `selectinload(Post.tags)` 一次性预加载关联，点赞数用单条 `GROUP BY` 聚合查询批量计算。实测 GET /api/posts 返回 6 篇文章只触发 4 条 SQL（优化前约 19 条，与数据量无关）。
 - MySQL 全文搜索：关键词搜索走 FULLTEXT 组合索引（ngram 中文分词），SQLite 测试环境回退 LIKE。
 
+## 可观测性
+
+- **结构化 JSON 日志**：所有应用日志（请求访问、慢查询、异常）输出为单行 JSON，含 `ts / level / logger / msg / rid / method / path / status / dur_ms / ip` 等字段，可直接接入 ELK / Datadog / 日志采集器；异常日志附带 `stack` 便于排查线上问题。
+- **请求追踪**：每个请求生成 `request_id`，随响应头 `X-Request-Id` 返回，同一请求的所有日志（含慢查询）可关联检索。
+- **健康检查**：`/health` 存活探针 + `/healthz` 就绪探针（校验数据库连通，供 Docker/K8s 使用）。
+- **慢查询日志**：单条 SQL 超过 `SLOW_QUERY_MS`（默认 200ms）自动记录 WARNING。
+
 ## 数据库迁移
 
 修改 `models.py` 后（配合 Flask-Migrate 管理 MySQL 结构变更）：
