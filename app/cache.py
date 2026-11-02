@@ -20,6 +20,16 @@ def _client(app):
     return app.extensions['cache_redis']
 
 
+def _bump(app, name, prefix):
+    """Prometheus 缓存指标打点：metrics 未启用时零开销跳过，绝不抛错。"""
+    m = app.extensions.get('metrics')
+    if m is None:
+        return
+    bucket = m.setdefault('cache', {})
+    key = (name, prefix)
+    bucket[key] = bucket.get(key, 0) + 1
+
+
 def cached(key_prefix, timeout=None):
     """缓存视图返回的 JSON 响应。key = key_prefix:path?query。"""
     def deco(fn):
@@ -40,13 +50,16 @@ def cached(key_prefix, timeout=None):
             try:
                 hit = client.get(key)
                 if hit is not None:
+                    _bump(app, 'cache_hits_total', key_prefix)
                     return app.response_class(hit, status=200, mimetype='application/json')
                 resp = fn(*args, **kwargs)
                 if resp.status_code == 200:
+                    _bump(app, 'cache_misses_total', key_prefix)
                     client.setex(key, ttl, resp.get_data())
                 return resp
             except RedisError:
                 # Redis 故障：降级为直接执行，不抛给用户
+                _bump(app, 'cache_degraded_total', None)
                 return fn(*args, **kwargs)
         return wrapper
     return deco

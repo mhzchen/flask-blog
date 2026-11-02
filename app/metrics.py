@@ -76,6 +76,32 @@ def register_metrics(app):
         return body, 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
 
 
+def _db_pool():
+    """Read SQLAlchemy connection pool counters as dict.
+
+    Pool.status() returns a human string (not a dict), so read counters
+    individually; both QueuePool methods (checkedout()/checkedin()/size()/
+    overflow()) and StaticPool attributes (size) are supported.
+    """
+    try:
+        from app import db
+        p = db.engine.pool
+    except Exception:
+        return {}
+    info = {}
+    for name in ("checkedout", "checkedin", "size", "overflow"):
+        attr = getattr(p, name, None)
+        if attr is None:
+            info[name] = 0
+            continue
+        try:
+            val = attr() if callable(attr) else attr
+        except Exception:
+            val = 0
+        info[name] = val if isinstance(val, int) else 0
+    return info
+
+
 def render_metrics(state):
     """把状态渲染为 Prometheus 文本格式。"""
     lines = [
@@ -109,6 +135,36 @@ def render_metrics(state):
     lines.append("# HELP http_requests_inflight Number of requests currently in flight")
     lines.append("# TYPE http_requests_inflight gauge")
     lines.append("http_requests_inflight %d" % state["inflight"])
+
+    lines.append("# HELP cache_hits_total Redis cache hits by prefix")
+    lines.append("# TYPE cache_hits_total counter")
+    for (name, prefix), n in sorted(state.get("cache", {}).items()):
+        if name == "cache_hits_total" and prefix:
+            lines.append('cache_hits_total{prefix="%s"} %d' % (prefix, n))
+
+    lines.append("# HELP cache_misses_total Redis cache misses (re-fetch) by prefix")
+    lines.append("# TYPE cache_misses_total counter")
+    for (name, prefix), n in sorted(state.get("cache", {}).items()):
+        if name == "cache_misses_total":
+            lines.append('cache_misses_total{prefix="%s"} %d' % (prefix, n))
+
+    lines.append("# HELP cache_degraded_total Redis down, degraded to direct query")
+    lines.append("# TYPE cache_degraded_total counter")
+    for (name, prefix), n in sorted(state.get("cache", {}).items()):
+        if name == "cache_degraded_total":
+            lines.append("cache_degraded_total %d" % n)
+
+    lines.append("# HELP db_pool_checkedout SQLAlchemy pool connections checked out")
+    lines.append("# TYPE db_pool_checkedout gauge")
+    lines.append("db_pool_checkedout %d" % _db_pool().get("checkedout", 0))
+
+    lines.append("# HELP db_pool_checkedin SQLAlchemy pool idle connections")
+    lines.append("# TYPE db_pool_checkedin gauge")
+    lines.append("db_pool_checkedin %d" % _db_pool().get("checkedin", 0))
+
+    lines.append("# HELP db_pool_size SQLAlchemy pool current size")
+    lines.append("# TYPE db_pool_size gauge")
+    lines.append("db_pool_size %d" % _db_pool().get("size", 0))
 
     lines.append("# HELP process_uptime_seconds Uptime of the process in seconds")
     lines.append("# TYPE process_uptime_seconds gauge")

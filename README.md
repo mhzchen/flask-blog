@@ -137,7 +137,7 @@ docker compose up -d --build
 - Swagger UI 交互文档：**http://localhost:8000/swagger**（12 个 REST 接口，含 JWT 认证可在线调试）
 - OpenAPI 规范：**http://localhost:8000/openapi.json**（`/swagger` 的数据源）
 - 后端健康检查：**http://localhost:8000/health**
-- Prometheus 指标：**http://localhost:8000/metrics**（请求量/延迟直方图/并发/存活，可接 Grafana）
+- Prometheus 指标：**http://localhost:8000/metrics**（请求量/延迟直方图/并发/存活/Redis 缓存命中率/SQLAlchemy 连接池，可接 Grafana）
 
 ### 5. 缓存与部署验证（实测）
 
@@ -188,7 +188,7 @@ docker compose up -d --build
 - **请求追踪**：每个请求生成 `request_id`，随响应头 `X-Request-Id` 返回，同一请求的所有日志（含慢查询）可关联检索。
 - **健康检查**：`/health` 存活探针 + `/healthz` 就绪探针（校验数据库连通，供 Docker/K8s 使用）。
 - **慢查询日志**：单条 SQL 超过 `SLOW_QUERY_MS`（默认 200ms）自动记录 WARNING。
-- **Prometheus 指标**：`/metrics` 暴露 Prometheus 文本格式指标（请求量计数、延迟直方图、并发水位、进程存活），可直接被 Prometheus 抓取并接入 Grafana 做面板/告警；`METRICS_ENABLED` 控制开关（生产/开发默认开，测试关）。
+- **Prometheus 指标**：`/metrics` 暴露 Prometheus 文本格式指标（请求量计数、延迟直方图、并发水位、进程存活），并在缓存层打点——**Redis 缓存命中/未命中/降级计数**（按缓存前缀），以及 **SQLAlchemy 连接池状态**（checkedout/checkedin/size），可直接被 Prometheus 抓取并接入 Grafana 做面板/告警；`METRICS_ENABLED` 控制开关（生产/开发默认开，测试关）。
 
 ## 数据库迁移
 
