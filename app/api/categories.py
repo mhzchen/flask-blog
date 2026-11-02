@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify
 
-from app.models import Category
 from app.cache import cached
+from app.models import Category
 
 categories_bp = Blueprint('categories', __name__)
 

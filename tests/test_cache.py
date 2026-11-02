@@ -1,8 +1,6 @@
 """Redis 缓存装饰器与失效逻辑测试（用内存 FakeRedis，不依赖真实 Redis）。"""
-import pytest
-from redis.exceptions import RedisError
-
 from app.cache import cached, invalidate
+from redis.exceptions import RedisError
 
 
 class FakeRedis:

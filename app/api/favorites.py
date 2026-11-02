@@ -1,10 +1,10 @@
 from flask import Blueprint, jsonify
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload
-from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.models import Post, db, favorites, post_likes
 from app import limiter
+from app.models import Post, db, favorites, post_likes
 
 favorites_bp = Blueprint('favorites', __name__)
 

@@ -7,9 +7,8 @@
 """
 from functools import wraps
 
-from flask import request, jsonify, g
-from pydantic import BaseModel, Field, EmailStr, ValidationError
-
+from flask import g, jsonify, request
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 # ---------- 请求体模型 ----------
 

@@ -1,5 +1,4 @@
 """后台管理接口测试：权限控制 + 文章/分类增删改"""
-import pytest
 
 
 def test_admin_requires_auth(client):

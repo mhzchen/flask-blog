@@ -4,10 +4,9 @@
 本文件单独启用限流验证 429 返回。
 """
 
-from sqlalchemy.pool import StaticPool
-
 from app import create_app, db
 from app.models import User
+from sqlalchemy.pool import StaticPool
 
 
 def _make_app():

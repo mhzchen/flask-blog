@@ -5,11 +5,11 @@
 - 发表：需登录
 - 删除：仅评论作者本人或管理员
 """
-from flask import Blueprint, request, jsonify, g
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, g, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from app.models import Comment, Post, User, db
 from app import limiter
+from app.models import Comment, Post, User, db
 from app.schemas import CommentBody, validate_body
 
 comments_bp = Blueprint('comments', __name__)

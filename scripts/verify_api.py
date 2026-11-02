@@ -1,10 +1,9 @@
 """用 Flask 测试客户端验证所有 RESTful API 端点。
 
 从 scripts/ 目录运行，仍能 import 项目根下的 app 包：
-    cd E:\code\python\flask-blog
-    venv\Scripts\python scripts\verify_api.py
+    cd E:\\code\\python\flask-blog
+    venv\\Scripts\\python scripts\verify_api.py
 """
-import json
 import os
 import sys
 import time

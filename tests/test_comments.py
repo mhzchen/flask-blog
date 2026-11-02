@@ -1,5 +1,4 @@
 """文章评论接口测试：列表、发表、删除与权限控制"""
-import pytest
 from app.models import Comment, User, db
 
 
@@ -80,7 +79,7 @@ def test_delete_comment_requires_auth(client, app, post, normal_user):
 
 def test_delete_comment_forbidden_for_other(client, app, post, normal_user):
     c = _add_comment(post, normal_user, 'alice 的评论')
-    bob = _make_user('bob')
+    _make_user('bob')
     bob_headers = _login_user(client, 'bob', 'secret123')
     resp = client.delete(f'/api/comments/{c.id}', headers=bob_headers)
     assert resp.status_code == 403

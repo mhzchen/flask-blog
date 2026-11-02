@@ -1,13 +1,15 @@
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, g, jsonify
 from flask_jwt_extended import (
-    create_access_token, create_refresh_token, jwt_required,
+    create_access_token,
+    create_refresh_token,
     get_jwt_identity,
+    jwt_required,
 )
 
-from app.models import User, db
 from app import limiter
+from app.models import User, db
+from app.schemas import LoginBody, RegisterBody, validate_body
 from app.tasks import enqueue, send_welcome_email
-from app.schemas import RegisterBody, LoginBody, validate_body
 
 auth_bp = Blueprint('auth', __name__)
 

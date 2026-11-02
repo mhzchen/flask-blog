@@ -1,5 +1,4 @@
 """XSS 防护测试：HTML 净化工具 + 文章创建时净化入库"""
-import pytest
 from app.sanitize import sanitize_html
 
 

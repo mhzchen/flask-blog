@@ -1,5 +1,4 @@
 """评论嵌套（回复）+ 分页测试"""
-from app import db
 from app.models import Comment
 
 
@@ -26,9 +25,12 @@ def test_reply_to_comment(client, post, user_headers):
 
 
 def test_reply_to_reply_denormalized(client, post, user_headers):
-    top = client.post(f'/api/posts/{post.id}/comments', headers=user_headers, json={'content': 'top'}).get_json()['comment']
-    r1 = client.post(f'/api/posts/{post.id}/comments', headers=user_headers, json={'content': 'r1', 'parent_id': top['id']}).get_json()['comment']
-    r2 = client.post(f'/api/posts/{post.id}/comments', headers=user_headers, json={'content': 'r2', 'parent_id': r1['id']}).get_json()['comment']
+    top = client.post(f'/api/posts/{post.id}/comments', headers=user_headers,
+                      json={'content': 'top'}).get_json()['comment']
+    r1 = client.post(f'/api/posts/{post.id}/comments', headers=user_headers,
+                      json={'content': 'r1', 'parent_id': top['id']}).get_json()['comment']
+    r2 = client.post(f'/api/posts/{post.id}/comments', headers=user_headers,
+                      json={'content': 'r2', 'parent_id': r1['id']}).get_json()['comment']
     assert r2['parent_id'] == top['id']
 
 

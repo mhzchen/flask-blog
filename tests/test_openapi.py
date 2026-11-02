@@ -1,5 +1,4 @@
 """Swagger UI / OpenAPI 规范端点测试（含 Pydantic 自动生成 schema）。"""
-import pytest
 
 
 def test_swagger_page(client):

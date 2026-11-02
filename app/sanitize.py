@@ -10,10 +10,12 @@
 - 链接协议：href 仅允许 http/https/mailto，剔除 javascript:/data: 等；
 - 过滤 style：避免 CSS 注入（expression/behavior 等老式向量）。
 """
+from typing import Dict, List
+
 import bleach
 
 # 允许的富文本标签
-ALLOWED_TAGS = [
+ALLOWED_TAGS: List[str] = [
     'a', 'abbr', 'acronym', 'b', 'blockquote', 'br', 'code', 'em',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol',
     'p', 'pre', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th',
@@ -21,24 +23,24 @@ ALLOWED_TAGS = [
 ]
 
 # 允许的属性（不含 on* 事件属性、不含 style）
-ALLOWED_ATTRIBUTES = {
+ALLOWED_ATTRIBUTES: Dict[str, List[str]] = {
     'a': ['href', 'title', 'target', 'rel'],
     'img': ['src', 'alt', 'title', 'width', 'height'],
     '*': ['class', 'id'],
 }
 
 # 允许的链接协议
-ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
+ALLOWED_PROTOCOLS: List[str] = ['http', 'https', 'mailto']
 
 
-def sanitize_html(content):
+def sanitize_html(content: str | None) -> str:
     """净化 HTML，剔除脚本/XSS 向量，返回安全的 HTML 字符串。"""
     if not content:
         return content or ''
-    return bleach.clean(
+    return str(bleach.clean(
         content,
         tags=ALLOWED_TAGS,
         attributes=ALLOWED_ATTRIBUTES,
         protocols=ALLOWED_PROTOCOLS,
         strip=True,
-    )
+    ))

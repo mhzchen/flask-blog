@@ -7,7 +7,7 @@
 """
 from functools import wraps
 
-from flask import request, has_request_context, current_app
+from flask import current_app, has_request_context, request
 from redis import Redis
 from redis.exceptions import RedisError
 

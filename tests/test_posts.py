@@ -1,6 +1,6 @@
 """文章接口测试：列表 / 详情 / 搜索 / 分类筛选 / 分页"""
 from app import db
-from app.models import Post, Category
+from app.models import Category, Post
 
 
 def _add_post(app, title, slug, category, summary='摘要', content='正文'):

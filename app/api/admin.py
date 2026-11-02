@@ -1,13 +1,14 @@
 from functools import wraps
-from flask import Blueprint, request, jsonify, g
+
+from flask import Blueprint, g, jsonify
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload
-from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.models import User, Post, Category, Tag, db, post_likes
 from app.cache import invalidate
+from app.models import Category, Post, Tag, User, db, post_likes
 from app.sanitize import sanitize_html
-from app.schemas import PostBody, CategoryBody, validate_body
+from app.schemas import CategoryBody, PostBody, validate_body
 
 admin_bp = Blueprint('admin', __name__)
 

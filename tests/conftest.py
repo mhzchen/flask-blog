@@ -5,10 +5,9 @@
 因此无需启动 Redis / Worker 也能跑通全部用例。
 """
 import pytest
-from sqlalchemy.pool import StaticPool
-
 from app import create_app, db
-from app.models import User, Category, Post
+from app.models import Category, Post, User
+from sqlalchemy.pool import StaticPool
 
 
 class TestConfig:

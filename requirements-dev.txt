@@ -1,4 +1,6 @@
-# 开发/测试环境依赖：-r requirements.txt 引入运行时依赖，再加测试工具
+# 开发/测试环境依赖（基于 requirements.txt 引入运行时依赖，再叠加测试与质量工具）
 -r requirements.txt
 pytest>=8.0
 pytest-cov>=5.0
+ruff>=0.6
+mypy>=1.11

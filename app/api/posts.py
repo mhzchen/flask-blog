@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from flask import Blueprint, request, jsonify
-from sqlalchemy import or_, and_, text, func
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import and_, func, or_, text
 from sqlalchemy.orm import joinedload, selectinload
-from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.models import Post, Category, Tag, db, post_likes
 from app import limiter
 from app.cache import cached
+from app.models import Category, Post, Tag, db, post_likes
 from app.tasks import enqueue, record_post_view
 
 posts_bp = Blueprint('posts', __name__)

@@ -73,7 +73,7 @@ def test_me_success(client, user_headers):
 # ---------- 阶段② 补充：/me 用户不存在 ----------
 
 def test_me_user_not_found(client, app, user_headers, normal_user):
-    from app.models import User, db
+    from app.models import db
     db.session.delete(normal_user)
     db.session.commit()
     resp = client.get('/api/auth/me', headers=user_headers)

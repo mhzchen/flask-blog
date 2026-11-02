@@ -1,0 +1,19 @@
+# ruff 代码规范配置（对应知识域⑥：代码规范）
+# 运行：ruff check .      /    ruff check --fix .
+line-length = 120
+target-version = "py312"
+src = ["app", "tests", "scripts"]
+
+[lint]
+# 启用：E(错误) W(警告) F(pyflakes) I(import排序) B(bugbear) RUF(ruff专用)
+# 不启用 UP：UP 内含 % -> f-string 改写（UF001-3），侵入性大、收益低
+select = ["E", "W", "F", "I", "B", "RUF"]
+# 关闭：
+#   BLE001 允许在「探测/降级」等场景盲捕获，如 tasks._broker_reachable
+#   PLW1508 允许 int(os.environ.get('X', 数字)) 简写（config.py 连接池参数）
+#   RUF001/002/003 中文界面文案/文档/注释用全角标点是正常书写，不视为歧义
+ignore = ["BLE001", "PLW1508", "RUF001", "RUF002", "RUF003"]
+
+[lint.per-file-ignores]
+"tests/*" = ["RUF012"]
+"config.py" = ["RUF012"]

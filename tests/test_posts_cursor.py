@@ -1,5 +1,4 @@
 """分页游标(keyset)测试：验证 offset 兼容、游标翻页无重复无遗漏、坏 cursor 拒绝"""
-from app.models import Post, Category, db
 
 
 def _make_posts(client, admin_headers, category, n):

@@ -8,7 +8,7 @@ components.schemas 直接由 Pydantic 模型（app.schemas）自动生成：
 """
 from flask import jsonify
 
-from app.schemas import RegisterBody, LoginBody, PostBody, CategoryBody, CommentBody
+from app.schemas import CategoryBody, CommentBody, LoginBody, PostBody, RegisterBody
 
 # 参与自动生成 schema 的模型：名称 -> Pydantic 模型类
 _SCHEMA_MODELS = {

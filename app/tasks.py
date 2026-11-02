@@ -53,7 +53,7 @@ def enqueue(task, *args, **kwargs):
 @celery.task(name='tasks.send_welcome_email')
 def send_welcome_email(user_id):
     """注册后异步发送欢迎邮件（此处模拟，真实项目换成 SMTP/邮件服务）。"""
-    from app.models import db, User
+    from app.models import User, db
     user = db.session.get(User, user_id)
     if user is None:
         return f'user {user_id} not found'
@@ -65,7 +65,7 @@ def send_welcome_email(user_id):
 def record_post_view(post_id):
     """异步累加文章浏览量（落库持久化，避免阻塞请求）。"""
     try:
-        from app.models import db, Post
+        from app.models import Post, db
         post = db.session.get(Post, post_id)
         if post:
             post.views = (post.views or 0) + 1

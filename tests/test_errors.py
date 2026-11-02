@@ -1,5 +1,4 @@
 """统一 JSON 错误处理 + 请求 ID 中间件测试。"""
-import pytest
 
 
 def test_404_returns_json(client):
