@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -36,8 +36,8 @@ class Post(db.Model):
     content = db.Column(db.Text, nullable=False)
 
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     views = db.Column(db.Integer, nullable=False, default=0)
 
     def to_dict(self, include_content=False, like_count=None):
@@ -98,7 +98,7 @@ class User(db.Model):
 favorites = db.Table('favorites',
                      db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
                      db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
-                     db.Column('created_at', db.DateTime, default=datetime.utcnow)
+                     db.Column('created_at', db.DateTime, default=lambda: datetime.now(timezone.utc))
                      )
 
 class Comment(db.Model):
@@ -110,7 +110,7 @@ class Comment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
     parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # 关系：to_dict 里能拿到评论者用户名
     user = db.relationship('User', backref='comments')
@@ -147,7 +147,7 @@ post_tags = db.Table('post_tags',
 post_likes = db.Table('post_likes',
                      db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
                      db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
-                     db.Column('created_at', db.DateTime, default=datetime.utcnow)
+                     db.Column('created_at', db.DateTime, default=lambda: datetime.now(timezone.utc))
                      )
 
 
