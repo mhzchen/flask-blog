@@ -6,6 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models import User, Post, Category, Tag, db, post_likes
 from app.cache import invalidate
+from app.sanitize import sanitize_html
 from app.schemas import PostBody, CategoryBody, validate_body
 
 admin_bp = Blueprint('admin', __name__)
@@ -57,8 +58,9 @@ def create_post():
         return jsonify({'error': '分类不存在。'}), 400
 
     slug = _make_slug(body.title)
+    # XSS 防护：内容净化后再入库，剔除脚本/事件属性等危险 HTML
     post = Post(title=body.title, slug=slug, summary=body.summary,
-                content=body.content, category_id=category.id)
+                content=sanitize_html(body.content), category_id=category.id)
     db.session.add(post)
     _sync_tags(post, body.tags)
     db.session.commit()
@@ -80,7 +82,7 @@ def update_post(post_id):
 
     post.title = body.title
     post.summary = body.summary
-    post.content = body.content
+    post.content = sanitize_html(body.content)
     post.category_id = category.id
     _sync_tags(post, body.tags)
     db.session.commit()

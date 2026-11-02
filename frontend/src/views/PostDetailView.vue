@@ -5,7 +5,7 @@
       <span>{{ post.category }}</span>
       <span> | {{ post.created_at }}</span> <span>| {{ post.views }} 阅读</span>
     </div>
-    <div class="detail-content" v-html="post.content"></div>
+    <div class="detail-content" v-html="safeContent"></div>
     <div v-if="post.tags && post.tags.length" class="detail-tags">       <span v-for="t in post.tags" :key="t" class="detail-tag">{{ t }}</span>     </div>
 
     <template v-if="auth.isAuthenticated">
@@ -62,15 +62,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
 import { useAuthStore } from '../stores/auth'
+import { sanitizeHtml } from '../utils/sanitize'
 
 const route = useRoute()
 const auth = useAuthStore()
 
 const post = ref(null)
+// 纵深防御：内容渲染前二次净化（后端已净化，这里兜底历史/其他入口数据）
+const safeContent = computed(() => (post.value ? sanitizeHtml(post.value.content) : ''))
 const favorited = ref(false)
 const favLoading = ref(false)
 const liked = ref(false)

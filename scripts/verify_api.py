@@ -1,5 +1,16 @@
-"""用 Flask 测试客户端验证所有 RESTful API 端点。"""
+"""用 Flask 测试客户端验证所有 RESTful API 端点。
+
+从 scripts/ 目录运行，仍能 import 项目根下的 app 包：
+    cd E:\code\python\flask-blog
+    venv\Scripts\python scripts\verify_api.py
+"""
 import json
+import os
+import sys
+
+# 把项目根加入 sys.path（无论从哪个目录调用本脚本都能找到 app 包）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import create_app
 
 app = create_app()

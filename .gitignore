@@ -1,4 +1,4 @@
-venv/
+﻿venv/
 __pycache__/
 *.pyc
 instance/
@@ -6,17 +6,18 @@ instance/
 frontend/node_modules/
 frontend/dist/
 
-# 测试与覆盖率产物
-.pytest_cache/.coverage
+# test & coverage artifacts
+.pytest_cache/
+.coverage
 coverage.xml
 htmlcov/
 
-# 临时验证/调试文件（会话遗留）
+# temp / debug files
 __*.py
 __*.txt
 *.log
 
-# 前端 e2e 报告
+# frontend e2e reports
 frontend/test-results/
 frontend/playwright-report/
 frontend/.auth/

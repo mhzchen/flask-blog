@@ -1,5 +1,7 @@
+from datetime import datetime
+
 from flask import Blueprint, request, jsonify
-from sqlalchemy import or_, text, func
+from sqlalchemy import or_, and_, text, func
 from sqlalchemy.orm import joinedload, selectinload
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
@@ -14,14 +16,21 @@ posts_bp = Blueprint('posts', __name__)
 @posts_bp.get('')
 @cached('posts', timeout=30)
 def list_posts():
-    """文章列表：支持搜索、分类筛选、分页（Redis 缓存 30 秒）"""
+    """文章列表：支持搜索、分类筛选、分页（Redis 缓存 30 秒）。
+
+    两种分页模式：
+    - 默认（offset）：page/per_page，返回 total/pages/has_next 等页码字段，供页码导航 UI 使用；
+    - 游标（keyset）：传 cursor（上一页返回的 next_cursor，格式 "unix时间戳_文章id"），
+      基于 (created_at, id) 复合键定位，深分页性能恒定（O(1)），供"加载更多/无限滚动"使用。
+      返回 next_cursor（下一页游标，null 表示没有更多）。
+    """
     category_slug = request.args.get('category', '')
     tag_name = request.args.get('tag', '').strip()
     keyword = request.args.get('q', '').strip()
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 6, type=int)
+    cursor = request.args.get('cursor', '')
+    per_page = min(request.args.get('per_page', 6, type=int), 50)  # 上限 50，防深分页滥用
 
-    query = Post.query.order_by(Post.created_at.desc())
+    query = Post.query
 
     if category_slug:
         query = query.join(Category).filter(Category.slug == category_slug)
@@ -41,7 +50,49 @@ def list_posts():
                 Post.content.ilike(f'%{keyword}%')
             ))
 
-    # N+1 优化：一次性预加载文章的分类与标签，避免逐条查询
+    # 排序键：created_at DESC, id DESC（id 作为次级键保证稳定唯一排序）
+    query = query.order_by(Post.created_at.desc(), Post.id.desc())
+
+    # ---- keyset 游标分页：定位到游标之后，避免大 offset 全表扫描 ----
+    if cursor:
+        try:
+            ts_str, id_str = cursor.split('_', 1)
+            cursor_ts = datetime.fromisoformat(ts_str)  # 转回 datetime，与列类型一致
+            cursor_id = int(id_str)
+        except ValueError:
+            return jsonify({'error': 'cursor 格式无效（应为 "created_at 的 ISO 字符串_id"）'}), 400
+        # (created_at, id) < (cursor_ts, cursor_id)
+        query = query.filter(or_(
+            Post.created_at < cursor_ts,
+            and_(Post.created_at == cursor_ts, Post.id < cursor_id),
+        )).limit(per_page)
+        items = query.options(
+            joinedload(Post.category), selectinload(Post.tags)
+        ).all()
+
+        # 批量计算本页点赞数（单条聚合，避免 N+1）
+        ids = [p.id for p in items]
+        like_map = {}
+        if ids:
+            rows = db.session.query(post_likes.c.post_id, func.count()).filter(
+                post_likes.c.post_id.in_(ids)
+            ).group_by(post_likes.c.post_id).all()
+            like_map = {post_id: cnt for post_id, cnt in rows}
+
+        # 下一页游标 = 本页最后一条的 (created_at, id)
+        next_cursor = None
+        if len(items) == per_page and items:
+            last = items[-1]
+            next_cursor = f'{last.created_at.isoformat()}_{last.id}'
+
+        return jsonify({
+            'items': [p.to_dict(like_count=like_map.get(p.id, 0)) for p in items],
+            'next_cursor': next_cursor,
+            'has_more': next_cursor is not None,
+        })
+
+    # ---- 默认 offset 分页：页码导航 UI 使用 ----
+    page = request.args.get('page', 1, type=int)
     pagination = query.options(
         joinedload(Post.category),
         selectinload(Post.tags),
@@ -56,6 +107,12 @@ def list_posts():
         ).group_by(post_likes.c.post_id).all()
         like_map = {post_id: cnt for post_id, cnt in rows}
 
+    # 同时给出游标（基于本页最后一条），前端可从页码无缝切换到游标翻页
+    next_cursor = None
+    if pagination.items:
+        last = pagination.items[-1]
+        next_cursor = f'{last.created_at.isoformat()}_{last.id}'
+
     return jsonify({
         'items': [p.to_dict(like_count=like_map.get(p.id, 0)) for p in pagination.items],
         'total': pagination.total,
@@ -65,6 +122,8 @@ def list_posts():
         'has_next': pagination.has_next,
         'prev_num': pagination.prev_num,
         'next_num': pagination.next_num,
+        'next_cursor': next_cursor,
+        'has_more': next_cursor is not None,
     })
 
 

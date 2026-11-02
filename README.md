@@ -109,8 +109,8 @@ npm run build                  # 产物输出到 frontend/dist/
 
 ## 验证
 
-- 后端：`venv\Scripts\python verify_api.py`（19 项 API 断言，全通过，基于 MySQL）
-- 全量测试：`venv\Scripts\python -m pytest`（86 项用例，覆盖率 98%，含评论/点赞/限流/缓存/OpenAPI）
+- 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
+- 全量测试：`venv\Scripts\python -m pytest`（92 项用例，覆盖率 97.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化）
 - 前端：`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ## 性能优化
