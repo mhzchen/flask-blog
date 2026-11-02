@@ -151,8 +151,14 @@ docker compose up -d --build
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（134 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存）
+- 全量测试：`venv\Scripts\python -m pytest`（142 项用例，覆盖率 96.31%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池）
 - 前端：`npm run test`（Vitest 8 项：XSS 净化单测 5 + PostCard 组件测试 3）、`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
+
+### CI 流水线（`.github/workflows/ci.yml`）
+
+- **lint-typecheck**：ruff + mypy（setup-python 自带 pip 缓存）
+- **test**：Python 3.11/3.12/3.13 矩阵跑全量 pytest（覆盖率门槛 90%），setup-python 自带 pip 缓存
+- **frontend**：setup-node + `npm ci --legacy-peer-deps`（兼容 vite5/vitest）+ `npm run test`（Vitest 8 项）+ `npm run build`（Vite 生产构建验证），npm 依赖缓存
 
 ## 性能优化
 
