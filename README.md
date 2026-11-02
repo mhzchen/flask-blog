@@ -110,7 +110,13 @@ npm run build                  # 产物输出到 frontend/dist/
 ## 验证
 
 - 后端：`venv\Scripts\python verify_api.py`（19 项 API 断言，全通过，基于 MySQL）
+- 全量测试：`venv\Scripts\python -m pytest`（86 项用例，覆盖率 98%，含评论/点赞/限流/缓存/OpenAPI）
 - 前端：`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
+
+## 性能优化
+
+- **杜绝 N+1**：文章列表/收藏列表/后台列表接口通过 `joinedload(Post.category)` + `selectinload(Post.tags)` 一次性预加载关联，点赞数用单条 `GROUP BY` 聚合查询批量计算。实测 GET /api/posts 返回 6 篇文章只触发 4 条 SQL（优化前约 19 条，与数据量无关）。
+- MySQL 全文搜索：关键词搜索走 FULLTEXT 组合索引（ngram 中文分词），SQLite 测试环境回退 LIKE。
 
 ## 数据库迁移
 

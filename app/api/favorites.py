@@ -1,7 +1,9 @@
 from flask import Blueprint, jsonify
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload, selectinload
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.models import Post, db, favorites
+from app.models import Post, db, favorites, post_likes
 from app import limiter
 
 favorites_bp = Blueprint('favorites', __name__)
@@ -16,9 +18,21 @@ def list_favorites():
         favorites, (favorites.c.post_id == Post.id)
     ).filter(
         favorites.c.user_id == user_id
-    ).order_by(favorites.c.created_at.desc()).all()
+    ).order_by(favorites.c.created_at.desc()).options(
+        joinedload(Post.category),
+        selectinload(Post.tags),
+    ).all()
 
-    return jsonify({'items': [p.to_dict() for p in faved_posts]})
+    # 批量计算点赞数，避免逐条 N+1
+    ids = [p.id for p in faved_posts]
+    like_map = {}
+    if ids:
+        rows = db.session.query(post_likes.c.post_id, func.count()).filter(
+            post_likes.c.post_id.in_(ids)
+        ).group_by(post_likes.c.post_id).all()
+        like_map = {post_id: cnt for post_id, cnt in rows}
+
+    return jsonify({'items': [p.to_dict(like_count=like_map.get(p.id, 0)) for p in faved_posts]})
 
 
 @favorites_bp.post('/<int:post_id>/toggle')

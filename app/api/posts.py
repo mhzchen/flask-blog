@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from sqlalchemy import or_, text
+from sqlalchemy import or_, text, func
+from sqlalchemy.orm import joinedload, selectinload
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models import Post, Category, Tag, db, post_likes
@@ -40,10 +41,23 @@ def list_posts():
                 Post.content.ilike(f'%{keyword}%')
             ))
 
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    # N+1 优化：一次性预加载文章的分类与标签，避免逐条查询
+    pagination = query.options(
+        joinedload(Post.category),
+        selectinload(Post.tags),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    # 批量计算本页所有文章的点赞数（单条聚合查询，替代逐条 likes.count()）
+    ids = [p.id for p in pagination.items]
+    like_map = {}
+    if ids:
+        rows = db.session.query(post_likes.c.post_id, func.count()).filter(
+            post_likes.c.post_id.in_(ids)
+        ).group_by(post_likes.c.post_id).all()
+        like_map = {post_id: cnt for post_id, cnt in rows}
 
     return jsonify({
-        'items': [p.to_dict() for p in pagination.items],
+        'items': [p.to_dict(like_count=like_map.get(p.id, 0)) for p in pagination.items],
         'total': pagination.total,
         'page': pagination.page,
         'pages': pagination.pages,

@@ -1,8 +1,10 @@
 from functools import wraps
 from flask import Blueprint, request, jsonify, g
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload, selectinload
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.models import User, Post, Category, Tag, db
+from app.models import User, Post, Category, Tag, db, post_likes
 from app.cache import invalidate
 from app.schemas import PostBody, CategoryBody, validate_body
 
@@ -27,8 +29,21 @@ def admin_required(fn):
 @admin_required
 def list_posts():
     """后台文章列表（含正文，按时间倒序）"""
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    return jsonify({'items': [p.to_dict(include_content=True) for p in posts]})
+    posts = Post.query.order_by(Post.created_at.desc()).options(
+        joinedload(Post.category),
+        selectinload(Post.tags),
+    ).all()
+
+    # 批量计算点赞数，避免逐条 N+1
+    ids = [p.id for p in posts]
+    like_map = {}
+    if ids:
+        rows = db.session.query(post_likes.c.post_id, func.count()).filter(
+            post_likes.c.post_id.in_(ids)
+        ).group_by(post_likes.c.post_id).all()
+        like_map = {post_id: cnt for post_id, cnt in rows}
+
+    return jsonify({'items': [p.to_dict(include_content=True, like_count=like_map.get(p.id, 0)) for p in posts]})
 
 
 @admin_bp.post('/posts')

@@ -40,8 +40,12 @@ class Post(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     views = db.Column(db.Integer, nullable=False, default=0)
 
-    def to_dict(self, include_content=False):
-        """序列化为 JSON 字典。列表页可不返回正文以减小体积。"""
+    def to_dict(self, include_content=False, like_count=None):
+        """序列化为 JSON 字典。列表页可不返回正文以减小体积。
+
+        默认惰性读取 tags/category（适合详情页单条场景）；
+        列表页由调用方预加载关系并传入 like_count，避免 N+1 查询。
+        """
         data = {
             'id': self.id,
             'title': self.title,
@@ -51,7 +55,7 @@ class Post(db.Model):
             'category': self.category.name if self.category else None,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
             'views': self.views,
-            'like_count': self.likes.count(),
+            'like_count': self.likes.count() if like_count is None else like_count,
             'tags': [t.name for t in self.tags],
         }
         if include_content:
