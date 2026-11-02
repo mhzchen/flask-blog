@@ -32,6 +32,8 @@ class TestConfig:
     CELERY_TASK_EAGER_PROPAGATES = True
     CELERY_BROKER_URL = 'memory://'
     CELERY_RESULT_BACKEND = 'cache+memory://'
+    # 测试默认关闭限流，避免现有用例互相干扰；限流行为单独在 test_ratelimit 里验证
+    RATELIMIT_ENABLED = False
 
 
 @pytest.fixture()

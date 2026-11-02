@@ -32,6 +32,7 @@ class PostBody(BaseModel):
     summary: str = Field("", max_length=500, description="摘要")
     content: str = Field("", description="正文")
     category_id: int = Field(..., gt=0, description="所属分类 ID")
+    tags: list[str] = Field(default_factory=list, max_length=10, description="标签名列表（最多 10 个）")
 
 
 class CategoryBody(BaseModel):
@@ -64,3 +65,7 @@ def validate_body(model: type[BaseModel]):
             return fn(*args, **kwargs)
         return wrapper
     return deco
+
+class CommentBody(BaseModel):
+    """发表评论请求体"""
+    content: str = Field(..., min_length=1, max_length=2000, description="评论内容")

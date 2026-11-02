@@ -30,6 +30,9 @@ class Config:
     # 测试环境可开启 eager：让 .delay() 同步执行，不真正发到 broker
     CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'false').lower() in ('1', 'true', 'yes', 'on')
     CELERY_TASK_EAGER_PROPAGATES = os.environ.get('CELERY_TASK_EAGER_PROPAGATES', 'false').lower() in ('1', 'true', 'yes', 'on')
+    # ---------- 限流防刷 ----------
+    RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'redis://localhost:6379/2')
 
 
 class DevelopmentConfig(Config):

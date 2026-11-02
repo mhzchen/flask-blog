@@ -46,10 +46,13 @@ class Post(db.Model):
             'category_id': self.category_id,
             'category': self.category.name if self.category else None,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'tags': [t.name for t in self.tags],
         }
         if include_content:
             data['content'] = self.content
         return data
+
+    tags = db.relationship('Tag', secondary='post_tags', backref='posts', lazy='select')
 
     def __repr__(self):
         return f'<Post {self.title}>'
@@ -86,3 +89,51 @@ favorites = db.Table('favorites',
                      db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
                      db.Column('created_at', db.DateTime, default=datetime.utcnow)
                      )
+
+class Comment(db.Model):
+    """文章评论"""
+    __tablename__ = 'comments'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # 关系：to_dict 里能拿到评论者用户名
+    user = db.relationship('User', backref='comments')
+    post = db.relationship('Post', backref='comments')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'content': self.content,
+            'user_id': self.user_id,
+            'username': self.user.username if self.user else None,
+            'post_id': self.post_id,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+        }
+
+    def __repr__(self):
+        return f'<Comment {self.id} on post {self.post_id}>'
+
+
+# 文章标签关联表：多对多（一篇文章多个标签，一个标签多篇文章）
+post_tags = db.Table('post_tags',
+                     db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True),
+                     db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True)
+                     )
+
+
+class Tag(db.Model):
+    # 文章标签
+    __tablename__ = 'tags'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name}
+
+    def __repr__(self):
+        return f'<Tag {self.name}>'

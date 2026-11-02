@@ -11,8 +11,11 @@ from config import Config
 from app.celery_app import init_celery
 from app.openapi import register_openapi_routes
 from app.errors import register_error_handlers
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 db = SQLAlchemy()
+limiter = Limiter(key_func=get_remote_address)
 migrate = Migrate()
 jwt = JWTManager()
 
@@ -27,6 +30,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    limiter.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
 
     # 统一 JSON 错误处理（所有错误都返回结构化 JSON）
@@ -44,12 +48,16 @@ def create_app(config_class=Config):
     from app.api.categories import categories_bp
     from app.api.favorites import favorites_bp
     from app.api.admin import admin_bp
+    from app.api.comments import comments_bp
+    from app.api.tags import tags_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(posts_bp, url_prefix='/api/posts')
     app.register_blueprint(categories_bp, url_prefix='/api/categories')
     app.register_blueprint(favorites_bp, url_prefix='/api/favorites')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(comments_bp, url_prefix='/api')
+    app.register_blueprint(tags_bp, url_prefix='/api/tags')
 
     # 注册 OpenAPI 规范与 Swagger UI 文档路由
     register_openapi_routes(app)

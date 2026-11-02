@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, g
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 from app.models import User, db
+from app import limiter
 from app.tasks import enqueue, send_welcome_email
 from app.schemas import RegisterBody, LoginBody, validate_body
 
@@ -9,6 +10,7 @@ auth_bp = Blueprint('auth', __name__)
 
 
 @auth_bp.post('/register')
+@limiter.limit("5 per minute")
 @validate_body(RegisterBody)
 def register():
     """用户注册。
@@ -40,6 +42,7 @@ def register():
 
 
 @auth_bp.post('/login')
+@limiter.limit("10 per minute")
 @validate_body(LoginBody)
 def login():
     """用户登录：用户名 + 密码，成功返回 token。"""

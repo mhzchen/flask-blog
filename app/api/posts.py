@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from sqlalchemy import or_
 
-from app.models import Post, Category, db
+from app.models import Post, Category, Tag, db
 from app.cache import cached
 from app.tasks import enqueue, record_post_view
 
@@ -13,6 +13,7 @@ posts_bp = Blueprint('posts', __name__)
 def list_posts():
     """文章列表：支持搜索、分类筛选、分页（Redis 缓存 30 秒）"""
     category_slug = request.args.get('category', '')
+    tag_name = request.args.get('tag', '').strip()
     keyword = request.args.get('q', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 6, type=int)
@@ -21,10 +22,13 @@ def list_posts():
 
     if category_slug:
         query = query.join(Category).filter(Category.slug == category_slug)
+    if tag_name:
+        query = query.join(Post.tags).filter(Tag.name == tag_name)
     if keyword:
         query = query.filter(or_(
             Post.title.ilike(f'%{keyword}%'),
-            Post.summary.ilike(f'%{keyword}%')
+            Post.summary.ilike(f'%{keyword}%'),
+            Post.content.ilike(f'%{keyword}%')
         ))
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -47,3 +51,4 @@ def get_post(post_id):
     post = Post.query.get_or_404(post_id, description=f'文章 #{post_id} 不存在')
     enqueue(record_post_view, post_id)
     return jsonify({'post': post.to_dict(include_content=True)})
+

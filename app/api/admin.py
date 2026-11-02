@@ -2,7 +2,7 @@ from functools import wraps
 from flask import Blueprint, request, jsonify, g
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.models import User, Post, Category, db
+from app.models import User, Post, Category, Tag, db
 from app.cache import invalidate
 from app.schemas import PostBody, CategoryBody, validate_body
 
@@ -45,6 +45,7 @@ def create_post():
     post = Post(title=body.title, slug=slug, summary=body.summary,
                 content=body.content, category_id=category.id)
     db.session.add(post)
+    _sync_tags(post, body.tags)
     db.session.commit()
 
     invalidate('posts')
@@ -66,6 +67,7 @@ def update_post(post_id):
     post.summary = body.summary
     post.content = body.content
     post.category_id = category.id
+    _sync_tags(post, body.tags)
     db.session.commit()
 
     invalidate('posts')
@@ -133,6 +135,18 @@ def delete_category(cat_id):
     invalidate('categories')
     return jsonify({'message': '分类已删除。'})
 
+
+
+
+def _sync_tags(post, tag_names):
+    """把标签名列表同步到文章的标签集合（按需创建 Tag，去重、去空白）。"""
+    post.tags = []
+    for name in dict.fromkeys(t.strip() for t in (tag_names or []) if t.strip()):
+        tag = Tag.query.filter_by(name=name).first()
+        if tag is None:
+            tag = Tag(name=name)
+            db.session.add(tag)
+        post.tags.append(tag)
 
 def _make_slug(text):
     """生成一个带时间戳的唯一 slug，避免与已有标题冲突"""

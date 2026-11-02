@@ -8,7 +8,7 @@ components.schemas 直接由 Pydantic 模型（app.schemas）自动生成：
 """
 from flask import jsonify
 
-from app.schemas import RegisterBody, LoginBody, PostBody, CategoryBody
+from app.schemas import RegisterBody, LoginBody, PostBody, CategoryBody, CommentBody
 
 # 参与自动生成 schema 的模型：名称 -> Pydantic 模型类
 _SCHEMA_MODELS = {
@@ -16,6 +16,7 @@ _SCHEMA_MODELS = {
     "LoginBody": LoginBody,
     "PostBody": PostBody,
     "CategoryBody": CategoryBody,
+    "CommentBody": CommentBody,
 }
 
 
@@ -85,6 +86,14 @@ PATHS = {
             "responses": {"200": {"description": "分类列表"}},
         },
     },
+    "/api/tags": {
+        "get": {
+            "summary": "标签列表",
+            "description": "返回全部标签（按名称排序）。",
+            "tags": ["posts"],
+            "responses": {"200": {"description": "标签列表"}},
+        },
+    },
     "/api/posts": {
         "get": {
             "summary": "文章列表",
@@ -92,6 +101,7 @@ PATHS = {
             "tags": ["posts"],
             "parameters": [
                 {"name": "category", "in": "query", "schema": {"type": "string"}, "description": "分类 slug"},
+                {"name": "tag", "in": "query", "schema": {"type": "string"}, "description": "按标签名筛选"},
                 {"name": "q", "in": "query", "schema": {"type": "string"}, "description": "搜索关键词"},
                 {"name": "page", "in": "query", "schema": {"type": "integer"}, "description": "页码"},
                 {"name": "per_page", "in": "query", "schema": {"type": "integer"}, "description": "每页条数"},
@@ -142,6 +152,49 @@ PATHS = {
                 "403": {"description": "无管理员权限"},
                 "409": {"description": "slug 已存在"},
                 "422": {"description": "请求参数校验失败"},
+            },
+        },
+    },
+    "/api/posts/{post_id}/comments": {
+        "get": {
+            "summary": "文章评论列表",
+            "description": "返回指定文章的评论（按时间升序，分页）。",
+            "tags": ["posts"],
+            "parameters": [
+                {"name": "post_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+                {"name": "page", "in": "query", "schema": {"type": "integer"}},
+                {"name": "per_page", "in": "query", "schema": {"type": "integer"}},
+            ],
+            "responses": {"200": {"description": "评论列表"}},
+        },
+        "post": {
+            "summary": "发表评论",
+            "description": "需要登录，请求体经 Pydantic 校验。",
+            "tags": ["posts"],
+            "security": [{"bearerAuth": []}],
+            "requestBody": _json_body("CommentBody"),
+            "responses": {
+                "201": {"description": "评论成功"},
+                "401": {"description": "未登录"},
+                "404": {"description": "文章不存在"},
+                "422": {"description": "请求参数校验失败"},
+            },
+        },
+    },
+    "/api/comments/{comment_id}": {
+        "delete": {
+            "summary": "删除评论",
+            "description": "仅评论作者本人或管理员。",
+            "tags": ["posts"],
+            "security": [{"bearerAuth": []}],
+            "parameters": [
+                {"name": "comment_id", "in": "path", "required": True, "schema": {"type": "integer"}}
+            ],
+            "responses": {
+                "200": {"description": "删除成功"},
+                "401": {"description": "未登录"},
+                "403": {"description": "无权限"},
+                "404": {"description": "评论不存在"},
             },
         },
     },

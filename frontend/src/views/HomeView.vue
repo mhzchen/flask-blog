@@ -17,6 +17,14 @@
       </a>
     </div>
 
+    <div class="category-bar tag-bar">
+      <a href="#" @click.prevent="selectTag('')" :class="{ active: !tagName }">全部标签</a>
+      <a v-for="t in tags" :key="t.id" href="#"
+         @click.prevent="selectTag(t.name)" :class="{ active: tagName === t.name }">
+        {{ t.name }}
+      </a>
+    </div>
+
     <p class="result-info">共 {{ total }} 篇文章<template v-if="keyword">，搜索「{{ keyword }}」</template></p>
 
     <div v-if="posts.length" class="article-grid">
@@ -53,12 +61,15 @@ const hasPrev = ref(false)
 const hasNext = ref(false)
 const keyword = ref(route.query.q || '')
 const categorySlug = ref(route.query.category || '')
+const tags = ref([])
+const tagName = ref(route.query.tag || '')
 
 async function fetchData() {
   const { data } = await api.get('/posts', {
     params: {
       q: keyword.value || undefined,
       category: categorySlug.value || undefined,
+      tag: tagName.value || undefined,
       page: page.value,
     },
   })
@@ -76,15 +87,27 @@ async function fetchCategories() {
 
 function search() {
   page.value = 1
-  router.push({ name: 'home', query: { q: keyword.value || undefined, category: categorySlug.value || undefined } })
+  router.push({ name: 'home', query: { q: keyword.value || undefined, category: categorySlug.value || undefined, tag: tagName.value || undefined } })
   fetchData()
 }
 
 function selectCategory(slug) {
   categorySlug.value = slug
   page.value = 1
-  router.push({ name: 'home', query: { q: keyword.value || undefined, category: slug || undefined } })
+  router.push({ name: 'home', query: { q: keyword.value || undefined, category: slug || undefined, tag: tagName.value || undefined } })
   fetchData()
+}
+
+function selectTag(name) {
+  tagName.value = name
+  page.value = 1
+  router.push({ name: 'home', query: { q: keyword.value || undefined, category: categorySlug.value || undefined, tag: name || undefined } })
+  fetchData()
+}
+
+async function fetchTags() {
+  const { data } = await api.get('/tags')
+  tags.value = data.items
 }
 
 function goPage(n) {
@@ -96,6 +119,7 @@ function goPage(n) {
 
 onMounted(() => {
   fetchCategories()
+  fetchTags()
   fetchData()
 })
 </script>

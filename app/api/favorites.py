@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models import Post, db, favorites
+from app import limiter
 
 favorites_bp = Blueprint('favorites', __name__)
 
@@ -21,6 +22,7 @@ def list_favorites():
 
 
 @favorites_bp.post('/<int:post_id>/toggle')
+@limiter.limit("30 per minute")
 @jwt_required()
 def toggle_favorite(post_id):
     """切换收藏状态：未收藏则收藏，已收藏则取消"""

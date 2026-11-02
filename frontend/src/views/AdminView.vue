@@ -45,6 +45,10 @@
             </select>
           </div>
           <div class="form-group">
+            <label>标签（用逗号分隔）</label>
+            <input v-model="postForm.tags" class="form-input" placeholder="如：Flask, Web" />
+          </div>
+          <div class="form-group">
             <label>摘要</label>
             <input v-model="postForm.summary" class="form-input" />
           </div>
@@ -119,7 +123,7 @@ const categories = ref([])
 
 // ---- 文章 ----
 const postModal = ref({ show: false, editId: null, saving: false, error: '' })
-const postForm = ref({ title: '', summary: '', content: '', category_id: null })
+const postForm = ref({ title: '', summary: '', content: '', category_id: null, tags: '' })
 
 // ---- 分类 ----
 const catModal = ref({ show: false, editId: null, saving: false, error: '' })
@@ -136,12 +140,12 @@ async function fetchCategories() {
 }
 
 function openNewPost() {
-  postForm.value = { title: '', summary: '', content: '', category_id: categories.value[0]?.id || null }
+  postForm.value = { title: '', summary: '', content: '', category_id: categories.value[0]?.id || null, tags: '' }
   postModal.value = { show: true, editId: null, saving: false, error: '' }
 }
 
 function openEditPost(post) {
-  postForm.value = { title: post.title, summary: post.summary, content: post.content, category_id: post.category_id }
+  postForm.value = { title: post.title, summary: post.summary, content: post.content, category_id: post.category_id, tags: (post.tags || []).join(', ') }
   postModal.value = { show: true, editId: post.id, saving: false, error: '' }
 }
 
@@ -149,10 +153,11 @@ async function savePost() {
   postModal.value.saving = true
   postModal.value.error = ''
   try {
+    const payload = { ...postForm.value, tags: postForm.value.tags.split(',').map(s => s.trim()).filter(Boolean) }
     if (postModal.value.editId) {
-      await api.put(`/admin/posts/${postModal.value.editId}`, postForm.value)
+      await api.put(`/admin/posts/${postModal.value.editId}`, payload)
     } else {
-      await api.post('/admin/posts', postForm.value)
+      await api.post('/admin/posts', payload)
     }
     postModal.value.show = false
     await fetchPosts()
