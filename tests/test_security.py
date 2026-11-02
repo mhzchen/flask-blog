@@ -103,3 +103,65 @@ def test_register_strong_password_ok(app):
     with app.app_context():
         u = auth_service.register("w3", "w3@e.com", "strong123")
         assert u is not None
+
+
+
+# ---------------- 登录锁定：Redis 共享（多 worker/多实例） ----------------
+
+class FakeRedis:
+    """内存 Redis 替身：支持登录锁定需要的 incr/expire/get/delete。"""
+    def __init__(self):
+        self.store = {}
+        self.ttls = {}
+
+    def incr(self, key):
+        self.store[key] = self.store.get(key, 0) + 1
+        return self.store[key]
+
+    def expire(self, key, ttl):
+        self.ttls[key] = ttl
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def delete(self, *keys):
+        for k in keys:
+            self.store.pop(k, None)
+            self.ttls.pop(k, None)
+
+
+def test_login_lockout_shared_redis(app):
+    """计数落在 Redis：即使本进程 dict 无记录，也能判定锁定（多实例共享生效）。"""
+    from app.services import _record_failure, _is_locked, _clear_failures, _LOGIN_FAILURES
+    r = FakeRedis()
+    with app.app_context():
+        _LOGIN_FAILURES.clear()
+        app.extensions['cache_redis'] = r
+        app.config['LOGIN_MAX_FAILURES'] = 3
+        for _ in range(3):
+            _record_failure('bob')
+        # 达到阈值锁定
+        assert _is_locked('bob') is True
+        # 计数在 Redis，而非进程内 dict（模拟另一 worker 无本地计数也能锁定）
+        assert r.store.get('login_fail:bob') == 3
+        assert _LOGIN_FAILURES.get('bob') is None
+        # 锁定窗口 TTL 已设置（Redis EXPIRE 生效）
+        assert r.ttls.get('login_fail:bob') == app.config['LOGIN_LOCKOUT_SECONDS']
+        # 成功登录解锁：Redis key 清除，不再锁定
+        _clear_failures('bob')
+        assert _is_locked('bob') is False
+        assert r.store.get('login_fail:bob') is None
+
+
+def test_login_lockout_redis_disabled_fallback_dict(app):
+    """关闭 Redis 共享（或 Redis 不可用）时降级为进程内 dict，单机仍能锁定。"""
+    from app.services import _record_failure, _is_locked, _LOGIN_FAILURES
+    with app.app_context():
+        _LOGIN_FAILURES.clear()
+        app.config['LOGIN_REDIS_ENABLED'] = False
+        app.config['LOGIN_MAX_FAILURES'] = 3
+        for _ in range(3):
+            _record_failure('carol')
+        assert _is_locked('carol') is True
+        # 计数落在进程内 dict
+        assert _LOGIN_FAILURES.get('carol') is not None

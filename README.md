@@ -153,7 +153,7 @@ docker compose up -d --build
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（142 项用例，覆盖率 96.31%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池）
+- 全量测试：`venv\Scripts\python -m pytest`（147 项用例，覆盖率 96.11%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存/metrics 缓存打点与连接池）
 - 前端：`npm run test`（Vitest 8 项：XSS 净化单测 5 + PostCard 组件测试 3）、`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ### CI 流水线（`.github/workflows/ci.yml`）
@@ -186,7 +186,7 @@ docker compose up -d --build
 ## 安全纵深
 
 - **安全响应头**（`app/security.py`）：每个响应注入 `CSP / X-Frame-Options: DENY / X-Content-Type-Options: nosniff / Referrer-Policy / Permissions-Policy`，HTTPS 下追加 `HSTS`，防点击劫持、MIME 嗅探与内容注入；`SECURITY_HEADERS_ENABLED` 可开关。
-- **登录失败锁定**：连续登录失败达 `LOGIN_MAX_FAILURES`（默认 5）次，账号锁定 `LOGIN_LOCKOUT_SECONDS`（默认 300）秒，防暴力破解；生产多实例可换 Redis 做共享计数。
+- **登录失败锁定**：连续登录失败达 `LOGIN_MAX_FAILURES`（默认 5）次，账号锁定 `LOGIN_LOCKOUT_SECONDS`（默认 300）秒，防暴力破解；失败计数默认存 Redis（`LOGIN_REDIS_ENABLED`，多 worker/多实例共享，锁定才不被分拆请求绕过），Redis 不可用自动降级为进程内计数。
 - **密码强度校验**：注册密码至少 8 位且同时含字母和数字，弱密码返回 422。
 - **既有防护**：XSS（后端 `bleach` 净化 + 前端 DOMPurify）、JWT 双 token + 刷新、接口限流（Redis 存储）、请求参数 Pydantic 校验。
 

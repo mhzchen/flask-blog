@@ -64,6 +64,10 @@ class Config:
     # 连续登录失败达到阈值后锁定该账号一段时间（防暴力破解）
     LOGIN_MAX_FAILURES = int(os.environ.get('LOGIN_MAX_FAILURES', 5))
     LOGIN_LOCKOUT_SECONDS = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', 300))
+    # 共享锁定开关：开启则失败计数存 Redis（多 worker/多实例共享，锁定才有效）；
+    # 关闭或 Redis 不可用时自动降级为进程内 dict（单机也能用，只是多实例下不共享）
+    LOGIN_REDIS_ENABLED = os.environ.get(
+        'LOGIN_REDIS_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
 
     # ---------- 可观测性指标 ----------
     # Prometheus 指标端点 /metrics 开关（生产/开发默认开，测试关）
@@ -92,6 +96,7 @@ class TestingConfig(Config):
     JWT_ACCESS_TOKEN_EXPIRES = 3600
     CORS_ORIGINS = '*'
     CACHE_ENABLED = False
+    CACHE_REDIS_URL = None  # 测试不连真实 Redis；缓存/登录锁定测试用 FakeRedis 注入
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
     CELERY_BROKER_URL = 'memory://'

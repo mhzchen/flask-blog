@@ -320,11 +320,36 @@ def _validate_password_strength(password: str) -> None:
         raise ServiceError("密码需同时包含字母和数字。", 422)
 
 
+def _login_redis(app):
+    """登录共享锁定的 Redis client；未启用或不可用返回 None（降级进程内 dict）。"""
+    if not app.config.get("LOGIN_REDIS_ENABLED", True):
+        return None
+    from app.cache import _client
+    try:
+        return _client(app)
+    except Exception:
+        return None
+
+
 def _record_failure(username: str) -> None:
-    """记录一次登录失败；达到阈值则锁定账号一段时间。"""
+    """记录一次登录失败；达到阈值则锁定账号一段时间。
+
+    多 worker/多实例下用 Redis INCR + EXPIRE 共享计数（否则各进程各自计数，
+    攻击者把失败请求分拆到不同 worker 即可绕过锁定）；Redis 不可用自动降级为进程内 dict。
+    """
     from flask import current_app
     max_failures = current_app.config.get("LOGIN_MAX_FAILURES", 5)
     lockout = current_app.config.get("LOGIN_LOCKOUT_SECONDS", 300)
+    client = _login_redis(current_app)
+    if client is not None:
+        try:
+            key = f"login_fail:{username}"
+            client.incr(key)
+            # 每次失败刷新锁定窗口=TTL；达到阈值后 _is_locked 依据计数判定，key 到期自然解锁
+            client.expire(key, lockout)
+            return
+        except Exception:
+            pass  # Redis 故障，降级进程内 dict
     record = _LOGIN_FAILURES.setdefault(username, [0, 0.0])
     record[0] += 1
     if record[0] >= max_failures:
@@ -334,6 +359,17 @@ def _record_failure(username: str) -> None:
 
 def _is_locked(username: str) -> bool:
     """账号是否处于锁定状态。"""
+    from flask import current_app
+    max_failures = int(current_app.config.get("LOGIN_MAX_FAILURES", 5))
+    client = _login_redis(current_app)
+    if client is not None:
+        try:
+            val = client.get(f"login_fail:{username}")
+            if val is None:
+                return False
+            return int(val) >= max_failures
+        except Exception:
+            pass  # Redis 故障，降级进程内 dict
     record = _LOGIN_FAILURES.get(username)
     if not record:
         return False
@@ -346,7 +382,14 @@ def _is_locked(username: str) -> bool:
 
 
 def _clear_failures(username: str) -> None:
-    """登录成功，清除失败记录。"""
+    """登录成功，清除失败记录（Redis + 进程内都清，双保险）。"""
+    from flask import current_app
+    client = _login_redis(current_app)
+    if client is not None:
+        try:
+            client.delete(f"login_fail:{username}")
+        except Exception:
+            pass
     _LOGIN_FAILURES.pop(username, None)
 
 
