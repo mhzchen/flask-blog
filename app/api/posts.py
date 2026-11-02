@@ -62,15 +62,18 @@ def list_posts():
 @posts_bp.get("/<int:post_id>")
 @jwt_required(optional=True)
 def get_post(post_id):
-    """文章详情（异步记录浏览量，附带当前用户点赞状态）"""
+    """文章详情（Redis 缓存基础数据 60s，异步记录浏览量，附带当前用户点赞状态）。
+
+    liked 是 per-user 状态，不进入缓存，每次单独查（单条索引，开销小）；
+    浏览量经缓存允许延迟展示（≤60s），文章变更会 invalidate("post_detail") 失效。
+    """
     try:
-        post = post_service.get_detail(post_id)
+        data = post_service.get_detail_cached(post_id)
     except ServiceError as e:
         return jsonify({"error": e.message}), e.status_code
     enqueue(record_post_view, post_id)
-    data = post.to_dict(include_content=True)
     user_id = get_jwt_identity()
-    data["liked"] = bool(user_id) and post_service.is_liked(int(user_id), post.id)
+    data["liked"] = bool(user_id) and post_service.is_liked(int(user_id), data["id"])
     return jsonify({"post": data})
 
 

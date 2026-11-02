@@ -146,7 +146,7 @@ docker compose up -d --build
 ## 验证
 
 - 后端 API 冒烟：`venv\Scripts\python scripts\verify_api.py`（19 项 API 断言，基于 MySQL seed 数据）
-- 全量测试：`venv\Scripts\python -m pytest`（130 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深）
+- 全量测试：`venv\Scripts\python -m pytest`（134 项用例，覆盖率 96.8%，含评论/点赞/限流/缓存/OpenAPI/游标分页/XSS净化/服务层单测/安全纵深/详情缓存）
 - 前端：`npm run build`（Vite 编译通过）、真实联调（5173 经代理访问 5000 返回数据）
 
 ## 性能优化
@@ -161,14 +161,14 @@ docker compose up -d --build
 | 场景 | 吞吐 | avg | p50 | p95 | p99 | 错误率 |
 |---|---|---|---|---|---|---|
 | `/api/posts`（Redis 缓存命中） | **79 QPS** | 246ms | 163ms | 774ms | 1858ms | 0% |
-| `/api/posts/1`（DB 直查，无缓存） | **24 QPS** | 800ms | 453ms | 1631ms | 8709ms | 0% |
+| `/api/posts/1`（Redis 详情缓存 60s） | **54 QPS** | 351ms | 339ms | 708ms | 808ms | 0% |
 
-结论与方向：
-- **缓存是最大性能杠杆**：同负载下缓存路径吞吐是 DB 直查的 3.3 倍，p99 延迟低 4.7 倍；
-- DB 直查路径（文章详情/无缓存列表）在高并发下延迟显著上升，**下一步可对文章详情页做细粒度缓存**（短 TTL + 按浏览量失效）；
-- 本机单容器、20 并发下的基线；生产多实例横向扩容 + 连接池调优可进一步提升。
+**缓存是最大性能杠杆**（同负载 20 并发对比）：
+- 详情页经 Redis 短 TTL 缓存（`post_detail:<id>`，60s）后，吞吐 24→**54 QPS（2.3 倍）**，p99 8.7s→**0.8s（-91%）**，尾部延迟问题基本消除；
+- 详情页 per-user 的 `liked` 不进缓存、每次单查（索引，开销小），浏览量允许延迟展示；
+- 文章创建/更新/删除时 `invalidate("post_detail")` 立即失效，保证读到最新。
 
-复现：`venv\Scripts\python scripts\load_test.py --url http://localhost:8000/api/posts --concurrency 20 --total 400`
+复现：`venv\Scripts\python scripts\load_test.py --url http://localhost:8000/api/posts/1 --concurrency 20 --total 400`
 
 ## 安全纵深
 

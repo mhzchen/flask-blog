@@ -106,6 +106,37 @@ class PostService:
     def get_detail(self, post_id: int) -> Post:
         return post_repo.get_by_id_or_404(post_id)
 
+    def get_detail_cached(self, post_id: int) -> dict:
+        """带缓存的详情（基础数据，不含 per-user 的 liked）。
+
+        - Redis 命中直接返回（浏览量允许延迟 ≤60s 展示，对详情页可接受）；
+        - miss 查库并写缓存；Redis 不可用自动降级为直查，绝不拖垮业务。
+        key = post_detail:<id>，文章变更时由 invalidate("post_detail") 失效。
+        """
+        from flask import current_app
+
+        from app.cache import _client
+        app = current_app._get_current_object()
+        client = _client(app)
+        key = f"post_detail:{post_id}"
+        if client is not None and app.config.get("CACHE_ENABLED", True):
+            try:
+                import json
+                hit = client.get(key)
+                if hit is not None:
+                    return json.loads(hit)
+            except Exception:
+                pass
+        post = post_repo.get_by_id_or_404(post_id)
+        data = post.to_dict(include_content=True)
+        if client is not None and app.config.get("CACHE_ENABLED", True):
+            try:
+                import json
+                client.setex(key, 60, json.dumps(data, ensure_ascii=False))
+            except Exception:
+                pass
+        return data
+
     def is_liked(self, user_id: int, post_id: int) -> bool:
         return post_repo.is_liked(user_id, post_id)
 
@@ -232,6 +263,7 @@ class AdminPostService:
         _sync_tags(post, tags)
         db_commit()
         invalidate("posts")
+        invalidate("post_detail")
         return post
 
     def update(self, post_id: int, title: str, summary: str, content: str,
@@ -244,6 +276,7 @@ class AdminPostService:
         _sync_tags(post, tags)
         db_commit()
         invalidate("posts")
+        invalidate("post_detail")
         return post
 
     def delete(self, post_id: int) -> None:
@@ -251,6 +284,7 @@ class AdminPostService:
         post_repo.delete(post)
         db_commit()
         invalidate("posts")
+        invalidate("post_detail")
 
 
 # ============================ 工具函数 ============================

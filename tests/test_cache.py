@@ -88,3 +88,53 @@ def test_invalidate_clears_prefix(app):
     assert 'posts:1' not in client.store
     assert 'posts:2' not in client.store
     assert 'categories:1' in client.store  # 其它前缀不受影响
+
+
+# ---------------- 文章详情缓存（PostService.get_detail_cached） ----------------
+
+def test_detail_cache_hit_queries_once(app, post):
+    from app.services import post_service
+    app.config['CACHE_ENABLED'] = True
+    app.extensions['cache_redis'] = FakeRedis()
+    with app.app_context():
+        d1 = post_service.get_detail_cached(post.id)
+        d2 = post_service.get_detail_cached(post.id)
+    assert d1['id'] == post.id
+    assert d1['content'] == '<p>测试正文</p>'
+    assert d2['id'] == post.id
+
+
+def test_detail_cache_stores_key(app, post):
+    from app.services import post_service
+    app.config['CACHE_ENABLED'] = True
+    client = FakeRedis()
+    app.extensions['cache_redis'] = client
+    with app.app_context():
+        post_service.get_detail_cached(post.id)
+    assert f'post_detail:{post.id}' in client.store
+
+
+def test_detail_invalidate_clears_key(app, post):
+    from app.services import post_service
+    app.config['CACHE_ENABLED'] = True
+    client = FakeRedis()
+    app.extensions['cache_redis'] = client
+    with app.app_context():
+        post_service.get_detail_cached(post.id)
+    assert f'post_detail:{post.id}' in client.store
+    invalidate('post_detail')
+    assert f'post_detail:{post.id}' not in client.store
+
+
+def test_detail_cache_missing_404(app):
+    from app.services import post_service
+    app.config['CACHE_ENABLED'] = True
+    app.extensions['cache_redis'] = FakeRedis()
+    from werkzeug.exceptions import HTTPException
+    with app.app_context():
+        try:
+            post_service.get_detail_cached(99999)
+            raised = False
+        except HTTPException:
+            raised = True
+    assert raised is True
