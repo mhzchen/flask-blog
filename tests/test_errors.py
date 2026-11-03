@@ -11,8 +11,8 @@ def test_404_returns_json(client):
 
 
 def test_405_returns_json(client):
-    # /api/categories 只支持 GET，DELETE 触发 405
-    resp = client.delete('/api/categories')
+    # /api/v1/categories 只支持 GET，DELETE 触发 405
+    resp = client.delete('/api/v1/categories')
     assert resp.status_code == 405
     assert resp.get_json()['code'] == 405
 
@@ -31,6 +31,6 @@ def test_unhandled_exception_returns_500_json_without_detail(app, client):
 
 
 def test_every_response_has_request_id(client):
-    for path in ('/api/posts', '/api/categories', '/api/no-such'):
+    for path in ('/api/v1/posts', '/api/v1/categories', '/api/no-such'):
         resp = client.get(path)
         assert resp.headers.get('X-Request-Id')

@@ -63,7 +63,7 @@ def test_login_lockout_after_failures(app):
     client = app.test_client()
     codes = []
     for _ in range(4):
-        r = client.post("/api/auth/login",
+        r = client.post("/api/v1/auth/login",
                         json={"username": "alice", "password": "wrongpass"})
         codes.append(r.status_code)
     # 前 3 次 401，第 4 次（已达阈值）应锁定返回 429
@@ -78,8 +78,8 @@ def test_login_lockout_cleared_on_success(app):
     _seed_user(app)
     client = app.test_client()
     # 一次失败后正确登录应成功（失败计数只影响锁定，正确密码可登录）
-    client.post("/api/auth/login", json={"username": "alice", "password": "wrongpass"})
-    r = client.post("/api/auth/login", json={"username": "alice", "password": "secret123"})
+    client.post("/api/v1/auth/login", json={"username": "alice", "password": "wrongpass"})
+    r = client.post("/api/v1/auth/login", json={"username": "alice", "password": "secret123"})
     assert r.status_code == 200
 
 
@@ -187,7 +187,7 @@ class _BlacklistRedis:
 
 
 def _jwt_login(client, username='alice', password='secret123'):
-    resp = client.post('/api/auth/login', json={'username': username, 'password': password})
+    resp = client.post('/api/v1/auth/login', json={'username': username, 'password': password})
     assert resp.status_code == 200, resp.get_json()
     return resp.get_json()['access_token']
 
@@ -197,10 +197,10 @@ def test_logout_revokes_access_token_immediately(app, client, normal_user):
     app.extensions['cache_redis'] = _BlacklistRedis()
     token = _jwt_login(client)
     h = {'Authorization': f'Bearer {token}'}
-    assert client.get('/api/auth/me', headers=h).status_code == 200
-    assert client.post('/api/auth/logout', headers=h).status_code == 200
+    assert client.get('/api/v1/auth/me', headers=h).status_code == 200
+    assert client.post('/api/v1/auth/logout', headers=h).status_code == 200
     # 登出后原 token 失效
-    assert client.get('/api/auth/me', headers=h).status_code == 401
+    assert client.get('/api/v1/auth/me', headers=h).status_code == 401
 
 
 def test_change_password_revokes_old_tokens(app, client, normal_user):
@@ -208,14 +208,14 @@ def test_change_password_revokes_old_tokens(app, client, normal_user):
     app.extensions['cache_redis'] = _BlacklistRedis()
     token = _jwt_login(client)
     h = {'Authorization': f'Bearer {token}'}
-    assert client.get('/api/auth/me', headers=h).status_code == 200
-    resp = client.post('/api/auth/password', headers=h,
+    assert client.get('/api/v1/auth/me', headers=h).status_code == 200
+    resp = client.post('/api/v1/auth/password', headers=h,
                        json={'old_password': 'secret123', 'new_password': 'newsecret456'})
     assert resp.status_code == 200, resp.get_json()
     # 旧 token 立即失效
-    assert client.get('/api/auth/me', headers=h).status_code == 401
+    assert client.get('/api/v1/auth/me', headers=h).status_code == 401
     # 旧密码登录失败（锁定重试会误伤，这里只验证一次）
-    r = client.post('/api/auth/login', json={'username': 'alice', 'password': 'secret123'})
+    r = client.post('/api/v1/auth/login', json={'username': 'alice', 'password': 'secret123'})
     assert r.status_code == 401
     # 新密码可登录
     assert _jwt_login(client, password='newsecret456')
@@ -226,7 +226,7 @@ def test_blocklist_degrades_without_redis(app, client, normal_user):
     app.extensions.pop('cache_redis', None)  # 无 Redis
     token = _jwt_login(client)
     h = {'Authorization': f'Bearer {token}'}
-    resp = client.post('/api/auth/logout', headers=h)
+    resp = client.post('/api/v1/auth/logout', headers=h)
     assert resp.status_code == 200
     assert '黑名单暂不可用' in resp.get_json()['message']
-    assert client.get('/api/auth/me', headers=h).status_code == 200  # 降级放行
+    assert client.get('/api/v1/auth/me', headers=h).status_code == 200  # 降级放行

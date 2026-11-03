@@ -8,7 +8,7 @@ def reg_payload():
 
 
 def test_register_success(client, reg_payload):
-    resp = client.post('/api/auth/register', json=reg_payload)
+    resp = client.post('/api/v1/auth/register', json=reg_payload)
     assert resp.status_code == 201
     data = resp.get_json()
     assert 'access_token' in data
@@ -17,57 +17,57 @@ def test_register_success(client, reg_payload):
 
 
 def test_register_missing_fields(client):
-    resp = client.post('/api/auth/register', json={})
+    resp = client.post('/api/v1/auth/register', json={})
     assert resp.status_code == 422
 
 
 def test_register_short_password(client, reg_payload):
     reg_payload['password'] = '123'
-    resp = client.post('/api/auth/register', json=reg_payload)
+    resp = client.post('/api/v1/auth/register', json=reg_payload)
     assert resp.status_code == 422
 
 
 def test_register_duplicate_username(client, reg_payload):
-    client.post('/api/auth/register', json=reg_payload)
-    resp = client.post('/api/auth/register', json=reg_payload)
+    client.post('/api/v1/auth/register', json=reg_payload)
+    resp = client.post('/api/v1/auth/register', json=reg_payload)
     assert resp.status_code == 409
     assert '用户名已被使用' in resp.get_json()['error']
 
 
 def test_register_duplicate_email(client, reg_payload):
-    client.post('/api/auth/register', json=reg_payload)
+    client.post('/api/v1/auth/register', json=reg_payload)
     dup = {'username': 'bob2', 'email': 'bob@example.com', 'password': 'secret123'}
-    resp = client.post('/api/auth/register', json=dup)
+    resp = client.post('/api/v1/auth/register', json=dup)
     assert resp.status_code == 409
     assert '邮箱已被注册' in resp.get_json()['error']
 
 
 def test_login_success(client, normal_user):
-    resp = client.post('/api/auth/login',
+    resp = client.post('/api/v1/auth/login',
                        json={'username': 'alice', 'password': 'secret123'})
     assert resp.status_code == 200
     assert 'access_token' in resp.get_json()
 
 
 def test_login_wrong_password(client, normal_user):
-    resp = client.post('/api/auth/login',
+    resp = client.post('/api/v1/auth/login',
                        json={'username': 'alice', 'password': 'wrongpass'})
     assert resp.status_code == 401
 
 
 def test_login_nonexistent_user(client):
-    resp = client.post('/api/auth/login',
+    resp = client.post('/api/v1/auth/login',
                        json={'username': 'nobody', 'password': 'whatever1'})
     assert resp.status_code == 401
 
 
 def test_me_requires_token(client):
-    resp = client.get('/api/auth/me')
+    resp = client.get('/api/v1/auth/me')
     assert resp.status_code == 401
 
 
 def test_me_success(client, user_headers):
-    resp = client.get('/api/auth/me', headers=user_headers)
+    resp = client.get('/api/v1/auth/me', headers=user_headers)
     assert resp.status_code == 200
     assert resp.get_json()['user']['username'] == 'alice'
 # ---------- 阶段② 补充：/me 用户不存在 ----------
@@ -76,13 +76,13 @@ def test_me_user_not_found(client, app, user_headers, normal_user):
     from app.models import db
     db.session.delete(normal_user)
     db.session.commit()
-    resp = client.get('/api/auth/me', headers=user_headers)
+    resp = client.get('/api/v1/auth/me', headers=user_headers)
     assert resp.status_code == 404
 
 # ---------- 阶段③ 补充：refresh token ----------
 
 def test_login_returns_refresh_token(client, normal_user):
-    resp = client.post('/api/auth/login',
+    resp = client.post('/api/v1/auth/login',
                        json={'username': 'alice', 'password': 'secret123'})
     data = resp.get_json()
     assert 'refresh_token' in data
@@ -90,10 +90,10 @@ def test_login_returns_refresh_token(client, normal_user):
 
 
 def test_refresh_exchanges_new_access_token(client, normal_user):
-    login = client.post('/api/auth/login',
+    login = client.post('/api/v1/auth/login',
                         json={'username': 'alice', 'password': 'secret123'}).get_json()
     refresh = login['refresh_token']
-    resp = client.post('/api/auth/refresh',
+    resp = client.post('/api/v1/auth/refresh',
                        headers={'Authorization': f'Bearer {refresh}'})
     assert resp.status_code == 200
     assert 'access_token' in resp.get_json()
@@ -101,14 +101,14 @@ def test_refresh_exchanges_new_access_token(client, normal_user):
 
 def test_refresh_rejects_access_token(client, normal_user):
     # access token 不可用于 refresh（token 类型不匹配，库返回 422）
-    login = client.post('/api/auth/login',
+    login = client.post('/api/v1/auth/login',
                         json={'username': 'alice', 'password': 'secret123'}).get_json()
     access = login['access_token']
-    resp = client.post('/api/auth/refresh',
+    resp = client.post('/api/v1/auth/refresh',
                        headers={'Authorization': f'Bearer {access}'})
     assert resp.status_code == 422
 
 
 def test_refresh_no_token(client):
-    resp = client.post('/api/auth/refresh')
+    resp = client.post('/api/v1/auth/refresh')
     assert resp.status_code == 401

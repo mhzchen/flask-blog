@@ -11,7 +11,7 @@ def _make_user(username, email=None):
 
 
 def _login_user(client, username, password):
-    r = client.post('/api/auth/login', json={'username': username, 'password': password})
+    r = client.post('/api/v1/auth/login', json={'username': username, 'password': password})
     assert r.status_code == 200
     return {'Authorization': f"Bearer {r.get_json()['access_token']}"}
 
@@ -26,12 +26,12 @@ def _add_comment(post, user, content):
 # ---------- 发表评论 ----------
 
 def test_create_comment_requires_auth(client, post):
-    resp = client.post(f'/api/posts/{post.id}/comments', json={'content': 'hi'})
+    resp = client.post(f'/api/v1/posts/{post.id}/comments', json={'content': 'hi'})
     assert resp.status_code == 401
 
 
 def test_create_comment(client, app, post, user_headers, normal_user):
-    resp = client.post(f'/api/posts/{post.id}/comments', headers=user_headers,
+    resp = client.post(f'/api/v1/posts/{post.id}/comments', headers=user_headers,
                        json={'content': '不错的一篇文章'})
     assert resp.status_code == 201
     data = resp.get_json()['comment']
@@ -41,13 +41,13 @@ def test_create_comment(client, app, post, user_headers, normal_user):
 
 
 def test_create_comment_empty_content(client, post, user_headers):
-    resp = client.post(f'/api/posts/{post.id}/comments', headers=user_headers,
+    resp = client.post(f'/api/v1/posts/{post.id}/comments', headers=user_headers,
                        json={'content': '   '})
     assert resp.status_code == 422
 
 
 def test_create_comment_post_not_found(client, user_headers):
-    resp = client.post('/api/posts/9999/comments', headers=user_headers,
+    resp = client.post('/api/v1/posts/9999/comments', headers=user_headers,
                        json={'content': 'hi'})
     assert resp.status_code == 404
 
@@ -56,7 +56,7 @@ def test_create_comment_post_not_found(client, user_headers):
 
 def test_list_comments(client, app, post, normal_user):
     _add_comment(post, normal_user, '第一条')
-    resp = client.get(f'/api/posts/{post.id}/comments')
+    resp = client.get(f'/api/v1/posts/{post.id}/comments')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['total'] == 1
@@ -65,7 +65,7 @@ def test_list_comments(client, app, post, normal_user):
 
 
 def test_list_comments_post_not_found(client):
-    resp = client.get('/api/posts/9999/comments')
+    resp = client.get('/api/v1/posts/9999/comments')
     assert resp.status_code == 404
 
 
@@ -73,7 +73,7 @@ def test_list_comments_post_not_found(client):
 
 def test_delete_comment_requires_auth(client, app, post, normal_user):
     c = _add_comment(post, normal_user, '评论')
-    resp = client.delete(f'/api/comments/{c.id}')
+    resp = client.delete(f'/api/v1/comments/{c.id}')
     assert resp.status_code == 401
 
 
@@ -81,24 +81,24 @@ def test_delete_comment_forbidden_for_other(client, app, post, normal_user):
     c = _add_comment(post, normal_user, 'alice 的评论')
     _make_user('bob')
     bob_headers = _login_user(client, 'bob', 'secret123')
-    resp = client.delete(f'/api/comments/{c.id}', headers=bob_headers)
+    resp = client.delete(f'/api/v1/comments/{c.id}', headers=bob_headers)
     assert resp.status_code == 403
 
 
 def test_delete_comment_by_author(client, app, post, user_headers, normal_user):
     c = _add_comment(post, normal_user, '自己的评论')
-    resp = client.delete(f'/api/comments/{c.id}', headers=user_headers)
+    resp = client.delete(f'/api/v1/comments/{c.id}', headers=user_headers)
     assert resp.status_code == 200
     assert db.session.get(Comment, c.id) is None
 
 
 def test_delete_comment_by_admin(client, app, post, admin_headers, normal_user):
     c = _add_comment(post, normal_user, 'alice 的评论')
-    resp = client.delete(f'/api/comments/{c.id}', headers=admin_headers)
+    resp = client.delete(f'/api/v1/comments/{c.id}', headers=admin_headers)
     assert resp.status_code == 200
     assert db.session.get(Comment, c.id) is None
 
 
 def test_delete_comment_not_found(client, user_headers):
-    resp = client.delete('/api/comments/9999', headers=user_headers)
+    resp = client.delete('/api/v1/comments/9999', headers=user_headers)
     assert resp.status_code == 404

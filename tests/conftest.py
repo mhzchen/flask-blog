@@ -70,7 +70,7 @@ def post(category):
 
 def _login(client, username, password):
     """登录并返回带 token 的请求头"""
-    resp = client.post('/api/auth/login',
+    resp = client.post('/api/v1/auth/login',
                        json={'username': username, 'password': password})
     assert resp.status_code == 200, resp.get_json()
     token = resp.get_json()['access_token']

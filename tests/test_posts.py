@@ -12,7 +12,7 @@ def _add_post(app, title, slug, category, summary='摘要', content='正文'):
 
 
 def test_list_posts_empty(client):
-    resp = client.get('/api/posts')
+    resp = client.get('/api/v1/posts')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['items'] == []
@@ -23,7 +23,7 @@ def test_list_posts_empty(client):
 def test_list_posts_with_data(client, app, category):
     _add_post(app, '文章A', 'post-a', category)
     _add_post(app, '文章B', 'post-b', category)
-    resp = client.get('/api/posts')
+    resp = client.get('/api/v1/posts')
     data = resp.get_json()
     assert resp.status_code == 200
     assert data['total'] == 2
@@ -34,7 +34,7 @@ def test_list_posts_with_data(client, app, category):
 
 def test_get_post_detail(client, app, category):
     p = _add_post(app, '详情文章', 'detail-post', category, content='<h2>正文</h2>')
-    resp = client.get(f'/api/posts/{p.id}')
+    resp = client.get(f'/api/v1/posts/{p.id}')
     assert resp.status_code == 200
     data = resp.get_json()['post']
     assert data['title'] == '详情文章'
@@ -43,14 +43,14 @@ def test_get_post_detail(client, app, category):
 
 
 def test_get_post_404(client):
-    resp = client.get('/api/posts/9999')
+    resp = client.get('/api/v1/posts/9999')
     assert resp.status_code == 404
 
 
 def test_search_by_keyword(client, app, category):
     _add_post(app, 'Flask 入门', 'flask-intro', category)
     _add_post(app, 'Vue 教程', 'vue-tutorial', category)
-    resp = client.get('/api/posts', query_string={'q': 'Flask'})
+    resp = client.get('/api/v1/posts', query_string={'q': 'Flask'})
     data = resp.get_json()
     assert data['total'] == 1
     assert data['items'][0]['title'] == 'Flask 入门'
@@ -62,7 +62,7 @@ def test_filter_by_category(client, app, category):
     db.session.commit()
     _add_post(app, 'py文章', 'py-1', category)
     _add_post(app, 'css文章', 'css-1', other)
-    resp = client.get('/api/posts', query_string={'category': 'css'})
+    resp = client.get('/api/v1/posts', query_string={'category': 'css'})
     data = resp.get_json()
     assert data['total'] == 1
     assert data['items'][0]['title'] == 'css文章'
@@ -71,7 +71,7 @@ def test_filter_by_category(client, app, category):
 def test_pagination(client, app, category):
     for i in range(3):
         _add_post(app, f'文章{i}', f'slug-{i}', category)
-    resp = client.get('/api/posts', query_string={'per_page': 2, 'page': 1})
+    resp = client.get('/api/v1/posts', query_string={'per_page': 2, 'page': 1})
     data = resp.get_json()
     assert data['page'] == 1
     assert len(data['items']) == 2

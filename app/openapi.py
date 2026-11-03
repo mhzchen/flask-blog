@@ -43,7 +43,7 @@ def _json_response(status, desc, schema_ref=None):
 
 
 PATHS = {
-    "/api/auth/register": {
+    "/api/v1/auth/register": {
         "post": {
             "summary": "用户注册",
             "description": "创建用户并返回 JWT access_token；注册成功后异步发送欢迎邮件。",
@@ -56,7 +56,7 @@ PATHS = {
             },
         },
     },
-    "/api/auth/login": {
+    "/api/v1/auth/login": {
         "post": {
             "summary": "用户登录",
             "description": "用户名+密码登录，成功返回 JWT access_token。",
@@ -69,7 +69,7 @@ PATHS = {
             },
         },
     },
-    "/api/auth/me": {
+    "/api/v1/auth/me": {
         "get": {
             "summary": "当前用户信息",
             "description": "需携带 Authorization: Bearer <token>。",
@@ -78,7 +78,7 @@ PATHS = {
             "responses": {"200": _json_response(200, "当前用户信息", "User")},
         },
     },
-    "/api/categories": {
+    "/api/v1/categories": {
         "get": {
             "summary": "分类列表",
             "description": "返回全部分类（Redis 缓存 60 秒）。",
@@ -86,7 +86,7 @@ PATHS = {
             "responses": {"200": {"description": "分类列表"}},
         },
     },
-    "/api/tags": {
+    "/api/v1/tags": {
         "get": {
             "summary": "标签列表",
             "description": "返回全部标签（按名称排序）。",
@@ -94,7 +94,7 @@ PATHS = {
             "responses": {"200": {"description": "标签列表"}},
         },
     },
-    "/api/posts": {
+    "/api/v1/posts": {
         "get": {
             "summary": "文章列表",
             "description": "支持分类筛选、关键词搜索、分页（Redis 缓存 30 秒）。",
@@ -109,7 +109,7 @@ PATHS = {
             "responses": {"200": {"description": "文章分页列表"}},
         },
     },
-    "/api/posts/{post_id}": {
+    "/api/v1/posts/{post_id}": {
         "get": {
             "summary": "文章详情",
             "description": "返回文章正文，并异步记录浏览量。",
@@ -123,7 +123,7 @@ PATHS = {
             },
         },
     },
-    "/api/admin/posts": {
+    "/api/v1/admin/posts": {
         "post": {
             "summary": "创建文章（管理员）",
             "description": "需要管理员权限，创建后自动失效文章列表缓存。",
@@ -139,7 +139,7 @@ PATHS = {
             },
         },
     },
-    "/api/admin/categories": {
+    "/api/v1/admin/categories": {
         "post": {
             "summary": "创建分类（管理员）",
             "description": "需要管理员权限，创建后自动失效分类缓存。",
@@ -155,7 +155,7 @@ PATHS = {
             },
         },
     },
-    "/api/posts/{post_id}/like": {
+    "/api/v1/posts/{post_id}/like": {
         "post": {
             "summary": "切换点赞",
             "description": "需要登录：未点赞则点赞，已点赞则取消；返回 liked 与 like_count。",
@@ -171,7 +171,7 @@ PATHS = {
             },
         },
     },
-    "/api/posts/{post_id}/comments": {
+    "/api/v1/posts/{post_id}/comments": {
         "get": {
             "summary": "文章评论列表",
             "description": "返回指定文章的顶层评论（含嵌套回复，按时间升序，分页）。",
@@ -197,7 +197,7 @@ PATHS = {
             },
         },
     },
-    "/api/comments/{comment_id}": {
+    "/api/v1/comments/{comment_id}": {
         "delete": {
             "summary": "删除评论",
             "description": "仅评论作者本人或管理员。",

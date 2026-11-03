@@ -1,4 +1,6 @@
 flask>=3.0
+asgiref>=3.8        # Flask async 视图支持（async extra，asyncio 桥接）
+flask-socketio>=5.0  # WebSocket 实时推送
 flask-sqlalchemy>=3.0
 flask-migrate>=4.0
 flask-jwt-extended>=4.6

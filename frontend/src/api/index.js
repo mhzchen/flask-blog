@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: '/api/v1',
   timeout: 10000,
 })
 
@@ -20,7 +20,7 @@ let refreshPromise = null
 async function doRefresh() {
   const refresh = localStorage.getItem('refresh_token')
   if (!refresh) throw new Error('no refresh token')
-  const { data } = await axios.post('/api/auth/refresh', null, {
+  const { data } = await axios.post('/api/v1/auth/refresh', null, {
     headers: { Authorization: `Bearer ${refresh}` },
   })
   localStorage.setItem('access_token', data.access_token)

@@ -36,7 +36,7 @@ def test_create_post_sanitizes_content(client, admin_headers, category):
         'content': '<p>正文</p><script>alert(1)</script>',
         'category_id': category.id, 'tags': [],
     }
-    resp = client.post('/api/admin/posts', json=payload, headers=admin_headers)
+    resp = client.post('/api/v1/admin/posts', json=payload, headers=admin_headers)
     assert resp.status_code == 201
     data = resp.get_json()['post']
     assert '<script>' not in data['content']

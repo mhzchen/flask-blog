@@ -45,7 +45,11 @@ def create_comment(post_id):
             body.content, body.parent_id)
     except ServiceError as e:
         return jsonify({"error": e.message}), e.status_code
-    return jsonify({"comment": comment.to_dict()}), 201
+    comment_dict = comment.to_dict()
+    # WebSocket 实时推送：新评论广播给所有在线客户端
+    from app.socketio import emit_comment_new
+    emit_comment_new(comment_dict)
+    return jsonify({"comment": comment_dict}), 201
 
 
 @comments_bp.delete("/comments/<int:comment_id>")

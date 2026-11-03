@@ -1,5 +1,6 @@
 <template>
   <div id="layout">
+    <div v-if="notice" class="realtime-notice">{{ notice }}</div>
     <NavBar />
     <main class="container">
       <router-view />
@@ -11,7 +12,26 @@
 </template>
 
 <script setup>
+import { onMounted, onUnmounted, ref } from 'vue'
 import NavBar from './components/NavBar.vue'
+import { connectSocket, disconnectSocket } from './utils/realtime'
+
+// WebSocket 实时通知条：收到评论/新文章广播时短暂展示
+const notice = ref('')
+let timer = null
+function showNotice(msg) {
+  notice.value = msg
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => { notice.value = '' }, 3000)
+}
+
+onMounted(() => {
+  connectSocket((type, data) => {
+    if (type === 'comment') showNotice(`新评论：${data.content || ''}`)
+    else if (type === 'post') showNotice(`新文章：${data.title || ''}`)
+  })
+})
+onUnmounted(disconnectSocket)
 </script>
 
 <style>
@@ -28,6 +48,7 @@ body {
   display: inline-block; background: #fdecea; color: #e74c3c;
   font-size: 12px; padding: 2px 10px; border-radius: 12px; margin-bottom: 8px;
 }
+.realtime-notice { position: fixed; top: 0; left: 0; right: 0; z-index: 999; text-align: center; padding: 10px; background: #2c3e50; color: #fff; font-size: 14px; }
 .article-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
 .article-card {
   background: #fff; border-radius: 10px; padding: 20px;

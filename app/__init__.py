@@ -21,6 +21,7 @@ from app.errors import register_error_handlers
 from app.metrics import register_metrics
 from app.openapi import register_openapi_routes
 from app.security import register_security_headers
+from app.socketio import register_socket_events, socketio
 from app.telemetry import _current_trace_id, init_telemetry
 
 db = SQLAlchemy(session_options={'class_': RoutingSession})
@@ -82,6 +83,10 @@ def create_app(config_class=None):
     # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
     init_celery(app)
 
+    # WebSocket 实时推送（Flask-SocketIO；ws 端点 /socket.io 需以 socketio.run/ASGI 提供）
+    socketio.init_app(app, cors_allowed_origins=app.config.get('CORS_ORIGINS', '*'))
+    register_socket_events()
+
     # 注册 API 蓝图（在 create_app 内部导入，避免循环导入）
     from app.api.admin import admin_bp
     from app.api.auth import auth_bp
@@ -89,15 +94,17 @@ def create_app(config_class=None):
     from app.api.comments import comments_bp
     from app.api.favorites import favorites_bp
     from app.api.posts import posts_bp
+    from app.api.system import system_bp
     from app.api.tags import tags_bp
 
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
-    app.register_blueprint(posts_bp, url_prefix='/api/posts')
-    app.register_blueprint(categories_bp, url_prefix='/api/categories')
-    app.register_blueprint(favorites_bp, url_prefix='/api/favorites')
-    app.register_blueprint(admin_bp, url_prefix='/api/admin')
-    app.register_blueprint(comments_bp, url_prefix='/api')
-    app.register_blueprint(tags_bp, url_prefix='/api/tags')
+    app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
+    app.register_blueprint(posts_bp, url_prefix='/api/v1/posts')
+    app.register_blueprint(categories_bp, url_prefix='/api/v1/categories')
+    app.register_blueprint(favorites_bp, url_prefix='/api/v1/favorites')
+    app.register_blueprint(admin_bp, url_prefix='/api/v1/admin')
+    app.register_blueprint(comments_bp, url_prefix='/api/v1')
+    app.register_blueprint(tags_bp, url_prefix='/api/v1/tags')
+    app.register_blueprint(system_bp, url_prefix='/api/v1/system')
 
     # 注册 OpenAPI 规范与 Swagger UI 文档路由
     register_openapi_routes(app)

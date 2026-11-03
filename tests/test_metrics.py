@@ -44,25 +44,25 @@ def test_metrics_excludes_itself(mclient):
 
 
 def test_requests_recorded_with_status(mclient):
-    mclient.get("/api/posts")
+    mclient.get("/api/v1/posts")
     mclient.get("/no/such/route")
     body = mclient.get("/metrics").get_data(as_text=True)
-    assert 'path="/api/posts",status="200"}' in body
+    assert 'path="/api/v1/posts",status="200"}' in body
     assert 'status="404"' in body
 
 
 def test_histogram_bucket_and_sum(mclient):
-    mclient.get("/api/posts")
+    mclient.get("/api/v1/posts")
     body = mclient.get("/metrics").get_data(as_text=True)
     # count 应为 1，且 sum 存在
-    assert 'http_request_duration_seconds_count{method="GET",path="/api/posts"} 1' in body
-    assert 'http_request_duration_seconds_sum{method="GET",path="/api/posts"}' in body
+    assert 'http_request_duration_seconds_count{method="GET",path="/api/v1/posts"} 1' in body
+    assert 'http_request_duration_seconds_sum{method="GET",path="/api/v1/posts"}' in body
     # +Inf 桶等于总计数
     assert '+Inf"} 1' in body
 
 
 def test_inflight_returns_to_zero(mclient):
-    mclient.get("/api/posts")
+    mclient.get("/api/v1/posts")
     body = mclient.get("/metrics").get_data(as_text=True)
     assert "http_requests_inflight 0" in body
 

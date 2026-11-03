@@ -35,7 +35,7 @@ def test_login_rate_limit_returns_429():
     client = app.test_client()
     codes = []
     for _ in range(11):
-        resp = client.post('/api/auth/login', json={'username': 'bob', 'password': 'wrong'})
+        resp = client.post('/api/v1/auth/login', json={'username': 'bob', 'password': 'wrong'})
         codes.append(resp.status_code)
     assert codes[-1] == 429
 
@@ -47,7 +47,7 @@ def test_register_rate_limit_returns_429():
     client = app.test_client()
     codes = []
     for _ in range(6):
-        resp = client.post('/api/auth/register', json={
+        resp = client.post('/api/v1/auth/register', json={
             'username': f'u{_}', 'email': f'u{_}@e.com', 'password': 'secret123'})
         codes.append(resp.status_code)
     assert codes[-1] == 429

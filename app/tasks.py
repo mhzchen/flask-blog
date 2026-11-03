@@ -179,7 +179,7 @@ def warm_hot_cache():
 
     base = current_app.config.get('BACKEND_INTERNAL_URL', 'http://localhost:8000')
     warmed = 0
-    for path in ('/api/posts', '/api/posts/1', '/api/posts/2', '/api/posts/3'):
+    for path in ('/api/v1/posts', '/api/v1/posts/1', '/api/v1/posts/2', '/api/v1/posts/3'):
         try:
             with urllib.request.urlopen(base + path, timeout=5) as resp:
                 if resp.status == 200:
