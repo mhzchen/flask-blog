@@ -9,6 +9,7 @@ from flask import Blueprint, g, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app import limiter
+from app.idempotency import idempotent
 from app.schemas import CommentBody, validate_body
 from app.services import ServiceError, auth_service, comment_service
 
@@ -35,6 +36,7 @@ def list_comments(post_id):
 @comments_bp.post("/posts/<int:post_id>/comments")
 @limiter.limit("20 per minute")
 @jwt_required()
+@idempotent()
 @validate_body(CommentBody)
 def create_comment(post_id):
     """发表评论（需登录，请求体经 Pydantic 校验）"""
