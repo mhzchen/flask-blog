@@ -51,6 +51,7 @@ def create_post():
             int(body.category_id), body.tags)
     except ServiceError as e:
         return jsonify({"error": e.message}), e.status_code
+    _enqueue_search(post.id, unindex=False)
     return jsonify({"post": post.to_dict(include_content=True)}), 201
 
 
@@ -66,6 +67,7 @@ def update_post(post_id):
             int(body.category_id), body.tags)
     except ServiceError as e:
         return jsonify({"error": e.message}), e.status_code
+    _enqueue_search(post_id, unindex=False)
     return jsonify({"post": post.to_dict(include_content=True)})
 
 
@@ -77,6 +79,7 @@ def delete_post(post_id):
         admin_post_service.delete(post_id)
     except ServiceError as e:
         return jsonify({"error": e.message}), e.status_code
+    _enqueue_search(post_id, unindex=True)
     return jsonify({"message": "文章已删除。"})
 
 
@@ -117,3 +120,18 @@ def delete_category(cat_id):
     except ServiceError as e:
         return jsonify({"error": e.message}), e.status_code
     return jsonify({"message": "分类已删除。"})
+
+
+def _enqueue_search(post_id, unindex: bool):
+    """文章增删改后异步同步 Meilisearch 索引（#56）。
+
+    投递失败/Meilisearch 不可用都由 enqueue 兜底（降级同步或记日志），绝不拖垮请求。
+    """
+    try:
+        from app.tasks import enqueue, index_post_search, unindex_post_search
+        if unindex:
+            enqueue(unindex_post_search, post_id)
+        else:
+            enqueue(index_post_search, post_id)
+    except Exception:
+        pass

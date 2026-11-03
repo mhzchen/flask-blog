@@ -50,3 +50,20 @@ def test_idempotent_degrades_without_redis(client, post, user_headers):
     headers = {**user_headers, 'Idempotency-Key': 'key-degrade'}
     r = client.post(f'/api/v1/posts/{post.id}/comments', json={'content': '降级'}, headers=headers)
     assert r.status_code == 201
+
+
+def test_idempotent_redis_error_degrades(client, post, user_headers, monkeypatch):
+    """Redis 调用抛 RedisError：幂等降级直接执行（不抛给用户）。"""
+    from redis.exceptions import RedisError
+
+    class Boom:
+        def get(self, k):
+            raise RedisError('redis down')
+
+        def setex(self, k, t, v):
+            raise RedisError('redis down')
+
+    monkeypatch.setattr('app.idempotency._client', lambda app: Boom())
+    headers = {**user_headers, 'Idempotency-Key': 'key-boom'}
+    r = client.post(f'/api/v1/posts/{post.id}/comments', json={'content': 'x'}, headers=headers)
+    assert r.status_code == 201

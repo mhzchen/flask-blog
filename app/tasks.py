@@ -217,3 +217,31 @@ def prune_deadletter():
     except Exception:
         current_app.logger.warning('[周期任务] 死信清理失败', exc_info=True)
         return 'prune failed'
+
+
+@celery.task(name='tasks.index_post_search', bind=True, max_retries=2, default_retry_delay=30)
+def index_post_search(self, post_id):
+    """文章发布/更新后异步同步到 Meilisearch (#56)."""
+    from app.meilisearch_client import index_post as _index
+    from app.models import Post, db
+    try:
+        post = db.session.get(Post, post_id)
+        if post is None:
+            return 'post %d not found' % post_id
+        ok = _index(post.id, post.title, post.summary or '', post.content or '')
+        return 'indexed post %d: %s' % (post_id, ok)
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=2 ** self.request.retries) from exc
+        current_app.logger.warning('Meilisearch index fail(deadletter): post=%s', post_id, exc_info=True)
+        _record_deadletter(current_app._get_current_object(), 'index_post_search', [post_id], str(exc))
+        return 'index failed permanently for post %d' % post_id
+
+
+@celery.task(name='tasks.unindex_post_search')
+def unindex_post_search(post_id):
+    """文章删除后从 Meilisearch 索引移除 (#56)."""
+    from app.meilisearch_client import unindex_post
+    ok = unindex_post(post_id)
+    current_app.logger.info('Meilisearch remove doc post=%s -> %s', post_id, ok)
+    return ok

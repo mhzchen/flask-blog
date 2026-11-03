@@ -99,8 +99,12 @@ class PostService:
 
     def list_offset(self, category_slug: str, tag_name: str, keyword: str,
                     page: int, per_page: int):
-        """offset 分页列表：返回 (items, like_map, pagination, next_cursor)。"""
-        query = post_repo.build_list_query(category_slug, tag_name, keyword)
+        """offset 分页列表：返回 (items, like_map, pagination, next_cursor)。
+
+        有关键词时优先走 Meilisearch（#56）得 post_id 集合再按 id 过滤；
+        Meilisearch 不可用时降级回 MySQL FULLTEXT / SQLite LIKE。
+        """
+        query = self._search_query(category_slug, tag_name, keyword)
         pagination, next_cursor = post_repo.list_offset(query, page, per_page)
         like_map = post_repo.count_likes_batch([p.id for p in pagination.items])
         return pagination, like_map, next_cursor
@@ -108,10 +112,27 @@ class PostService:
     def list_cursor(self, category_slug: str, tag_name: str, keyword: str,
                     cursor: str, per_page: int):
         """keyset 游标分页列表：返回 (items, like_map, next_cursor)。"""
-        query = post_repo.build_list_query(category_slug, tag_name, keyword)
+        query = self._search_query(category_slug, tag_name, keyword)
         items, next_cursor = post_repo.list_cursor(query, cursor, per_page)
         like_map = post_repo.count_likes_batch([p.id for p in items])
         return items, like_map, next_cursor
+
+    @staticmethod
+    def _search_query(category_slug: str, tag_name: str, keyword: str):
+        """构造列表查询：keyword 命中 Meilisearch 时按 id 过滤，否则走 DB 检索。
+
+        search_post_ids 返回 None 表示 Meilisearch 不可用 -> 降级 DB 检索；
+        返回 [] 表示无命中 -> 空结果；返回 ids -> 按 id 过滤（保持分类/标签过滤与排序）。
+        """
+        if not keyword:
+            return post_repo.build_list_query(category_slug, tag_name, "")
+        from app.meilisearch_client import search_post_ids
+        ids = search_post_ids(keyword)
+        if ids is None:
+            return post_repo.build_list_query(category_slug, tag_name, keyword)
+        if not ids:
+            return Post.query.filter(False)
+        return post_repo.build_list_query(category_slug, tag_name, "").filter(Post.id.in_(ids))
 
     def get_detail(self, post_id: int) -> Post:
         return post_repo.get_by_id_or_404(post_id)

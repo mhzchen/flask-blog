@@ -4,8 +4,6 @@
 防止"文档写了但路由没注册"或"路由改了文档没更新"的脱节。
 """
 import pytest
-from werkzeug.exceptions import NotFound, MethodNotAllowed
-
 from app import create_app
 from app.openapi import build_openapi_spec
 from config import TestingConfig
