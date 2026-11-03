@@ -11,6 +11,11 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///blog.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # ---------- 读写分离 ----------
+    # 配了 DATABASE_URL_SLAVE（从库连接串）则启用多 bind：default=主库（写）、slave=从库（读）。
+    # 未配置则回退单库（dev/SQLite/测试不受影响）。从库连接池与主库同一套优化参数。
+    _DATABASE_URL_SLAVE = os.environ.get('DATABASE_URL_SLAVE', '')
+    SQLALCHEMY_BINDS = {'slave': _DATABASE_URL_SLAVE} if _DATABASE_URL_SLAVE else {}
     # ---------- 连接池调优（MySQL 生效，SQLite 忽略） ----------
     # pool_pre_ping：取连接前先 ping，自动丢弃 MySQL 主动断开的陈旧连接，避免 500 Broken pipe
     # pool_size / max_overflow：连接池基础大小 + 溢出上限（并发峰值可临时多开）
@@ -79,6 +84,14 @@ class Config:
     # Prometheus 指标端点 /metrics 开关（生产/开发默认开，测试关）
     METRICS_ENABLED = os.environ.get('METRICS_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
 
+    # ---------- OpenTelemetry 全链路追踪 ----------
+    # 为真时初始化 OTel，给 Flask/SQLAlchemy/Redis/Celery 装 instrumentation，产生 HTTP->DB->Redis->Celery 一条 trace
+    OTEL_ENABLED = os.environ.get('OTEL_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
+    # 配了 OTLP endpoint（如 Jaeger/Tempo/Collector）走 OTLP 导出；留空则用 ConsoleSpanExporter 直接输出 stdout
+    OTEL_EXPORTER_OTLP_ENDPOINT = os.environ.get('OTEL_EXPORTER_OTLP_ENDPOINT', '')
+    OTEL_SERVICE_NAME = os.environ.get('OTEL_SERVICE_NAME', 'flask-blog')
+    OTEL_SERVICE_VERSION = os.environ.get('OTEL_SERVICE_VERSION', '1.0.0')
+
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流
@@ -110,6 +123,7 @@ class TestingConfig(Config):
     RATELIMIT_ENABLED = False
     SECURITY_HEADERS_ENABLED = False
     METRICS_ENABLED = False
+    OTEL_ENABLED = False
 
 
 class ProductionConfig(Config):

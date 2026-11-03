@@ -1,5 +1,13 @@
 <template>
-  <div v-if="post">
+  <div v-if="loadingPost" class="detail-skeleton">
+    <div class="skeleton-line" style="width:60%;height:28px;"></div>
+    <div class="skeleton-line" style="width:35%;height:14px;margin-top:14px;"></div>
+    <div class="skeleton-line" style="width:100%;height:16px;margin-top:28px;"></div>
+    <div class="skeleton-line" style="width:100%;height:16px;"></div>
+    <div class="skeleton-line" style="width:90%;height:16px;"></div>
+    <div class="skeleton-line" style="width:70%;height:16px;"></div>
+  </div>
+  <div v-else-if="post">
     <h1 class="detail-title">{{ post.title }}</h1>
     <div class="detail-meta">
       <span>{{ post.category }}</span>
@@ -72,6 +80,7 @@ const route = useRoute()
 const auth = useAuthStore()
 
 const post = ref(null)
+const loadingPost = ref(true)
 // 纵深防御：内容渲染前二次净化（后端已净化，这里兜底历史/其他入口数据）
 const safeContent = computed(() => (post.value ? sanitizeHtml(post.value.content) : ''))
 const favorited = ref(false)
@@ -87,14 +96,19 @@ const hasMore = ref(false)
 const total = ref(0)
 
 async function fetchPost() {
-  const { data } = await api.get(`/posts/${route.params.id}`)
-  post.value = data.post
-  liked.value = !!data.post.liked
-  if (auth.isAuthenticated) {
-    try {
-      const { data: fav } = await api.get(`/favorites/check/${route.params.id}`)
-      favorited.value = fav.favorited
-    } catch (e) { /* 忽略 */ }
+  loadingPost.value = true
+  try {
+    const { data } = await api.get(`/posts/${route.params.id}`)
+    post.value = data.post
+    liked.value = !!data.post.liked
+    if (auth.isAuthenticated) {
+      try {
+        const { data: fav } = await api.get(`/favorites/check/${route.params.id}`)
+        favorited.value = fav.favorited
+      } catch (e) { /* 忽略 */ }
+    }
+  } finally {
+    loadingPost.value = false
   }
 }
 
@@ -190,6 +204,17 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.detail-skeleton { padding: 8px 0; }
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+.detail-skeleton .skeleton-line {
+  background: #e5e6eb;
+  border-radius: 4px;
+  margin: 12px 0;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
 .like-btn { margin-right: 8px; background: #fff; border: 1px solid #f0c; color: #e74c3c; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
 .detail-tags { margin: 12px 0; }
 .detail-tag {

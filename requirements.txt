@@ -14,3 +14,10 @@ pydantic>=2.7
 email-validator>=2.0
 flask-limiter>=3.0
 bleach>=6.0
+# OpenTelemetry 全链路追踪（HTTP->DB->Redis->Celery 一条 trace）
+opentelemetry-sdk>=1.24
+opentelemetry-instrumentation-flask>=0.47
+opentelemetry-instrumentation-sqlalchemy>=0.47
+opentelemetry-instrumentation-redis>=0.47
+opentelemetry-instrumentation-celery>=0.47
+opentelemetry-exporter-otlp-proto-http>=1.24

@@ -16,12 +16,14 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
 from app.celery_app import init_celery
+from app.dbrouting import RoutingSession
 from app.errors import register_error_handlers
 from app.metrics import register_metrics
 from app.openapi import register_openapi_routes
 from app.security import register_security_headers
+from app.telemetry import _current_trace_id, init_telemetry
 
-db = SQLAlchemy()
+db = SQLAlchemy(session_options={'class_': RoutingSession})
 limiter = Limiter(key_func=get_remote_address)
 migrate = Migrate()
 jwt = JWTManager()
@@ -73,6 +75,9 @@ def create_app(config_class=None):
 
     # 慢查询日志：单条 SQL 超过阈值自动记录 WARNING
     _register_slow_query_logging(app)
+
+    # OpenTelemetry 全链路追踪：HTTP->DB->Redis->Celery 一条 trace（OTEL_ENABLED 开启）
+    init_telemetry(app)
 
     # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
     init_celery(app)
@@ -137,6 +142,9 @@ class _JsonFormatter(logging.Formatter):
             'logger': record.name,
             'msg': record.getMessage(),
         }
+        trace_id = _current_trace_id()
+        if trace_id:
+            entry['trace_id'] = trace_id
         # 把调用方通过 extra 注入的自定义字段合并进顶层
         for key in ('rid', 'method', 'path', 'status', 'dur_ms', 'ip', 'ua', 'sql'):
             val = getattr(record, key, None)

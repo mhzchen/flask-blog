@@ -120,3 +120,42 @@ jobs:
         run: npm run build
       - name: 生产依赖漏洞门禁（npm audit）
         run: npm audit --omit=dev --audit-level=high
+
+  publish-docker:
+    name: Publish Docker Images (GHCR)
+    runs-on: ubuntu-latest
+    # 仅在推送到 main 且前置质量门全绿后发布镜像，供蓝绿/生产部署拉取
+    needs: [lint-typecheck, test, migration, frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - name: Build & push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/${{ github.repository }}-frontend:latest,ghcr.io/${{ github.repository }}-frontend:sha-${{ github.sha }}

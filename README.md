@@ -213,3 +213,11 @@ flask --app wsgi db upgrade
 迁移已做**跨方言兼容**：全文索引（FULLTEXT + ngram）与索引存在性检查按方言处理（MySQL 用 information_schema，SQLite 用 sqlite_master；FULLTEXT 仅 MySQL 创建），保证 dev(SQLite)/prod(MySQL) 迁移链一致。CI 含独立 **DB Migration (MySQL)** job：在干净 MySQL 库跑 `flask db upgrade`，并校验建出的表与模型元数据一致（防迁移/模型漂移）。迁移使用 Alembic **batch mode**（`batch_alter_table`，约束须命名）处理 SQLite 方言不支持的 ALTER，dev(SQLite)/prod(MySQL) 均可从 0001 一路跑到 0007 全链，并可 downgrade 回退。
 
 > 原「服务端渲染（Jinja2 模板 + Flask-Login session）+ SQLite」版本已由本 API + Vue3 + MySQL 版本替代。
+
+
+## 本轮：#36 OpenTelemetry 全链路追踪 / #37 CI 发布镜像 + 蓝绿回滚 / #38 DB 读写分离 / #39 前端组合式 API + Pinia + 骨架屏
+
+- **#36 OpenTelemetry 全链路追踪**：新增 `app/telemetry.py`，按 `OTEL_EXPORTER_OTLP_ENDPOINT` 走 OTLP 或 ConsoleSpanExporter，对 Flask / SQLAlchemy / Redis / Celery 做 instrumentation（一条 HTTP→DB→Redis→Celery 的 trace）；请求 JSON 日志通过 `_JsonFormatter` 注入 `trace_id`（与 span 同一 trace_id 贯穿）。`OTEL_ENABLED` 开关控制、`_initialized` 幂等；requirements.txt 补 6 行 OTel 依赖。容器真验：`/api/posts/1` 日志 `"trace_id":"5f30735d…"` 与 ConsoleSpanExporter 多条 `SpanData` 的 `trace_id:0x5f30735d…` 完全一致。用例：`tests/test_telemetry.py`（3 项：无 span 返回 None / TestingConfig 关闭 / init 幂等）。
+- **#37 CI 发布 Docker 镜像 + 蓝绿回滚**：`.github/workflows/ci.yml` 新增 `publish-docker` job（needs 全部 4 个 job、仅 main push、GHCR login + metadata-action tags sha-+latest、push backend 与 frontend 镜像）；新增 `scripts/deploy-bluegreen.ps1`（读 `.bluegreen.state` 取 active → docker run 目标色容器 blue=8001/green=8002 → 轮询 `/health` 就绪（≤60s，失败删容器保 active）→ 写 state + 停旧容器；`-Rollback` 反向切回）。本地真验：`deploy` active=blue→green、`-Rollback`→blue 均成功，state 文件随之切换。
+- **#38 性能 DB 读写分离 + 连接池按角色拆分**：新增 `app/dbrouting.py` 的 `RoutingSession`（写/flush 固定走 default 主库，读在配置 slave 时走从库，无 slave 回落主库）；config 用 `DATABASE_URL_SLAVE` 生成 `SQLALCHEMY_BINDS={'slave':…}`（None 时空 dict 兜底），slave 独立 engine = 独立连接池（沿用池配置）。容器真验：带 `DATABASE_URL_SLAVE` 启动 `engines=['slave', None]`、读查询正常。用例：`tests/test_dbrouting.py`（3 项：读走 slave / 写走主库 / 无 slave 回落主库）。
+- **#39 前端组合式 API + Pinia 模块化 + 骨架屏**：新增 `frontend/src/stores/posts.js`（文章列表域 Pinia store：items/total/pages/hasPrev/hasNext/page/loading/categories/tags + fetchList/fetchCategories/fetchTags）；`HomeView.vue` 改用 `storeToRefs(store)`（删除本地 fetch 逻辑，保留筛选/翻页调 store）；`PostDetailView.vue` 加 `loadingPost` + skeleton-pulse 骨架屏（`v-if="loadingPost"` 6 条 skeleton-line）。验证：vitest **8 passed**（sanitize 5 + PostCard 3）、`npm run build` 成功。

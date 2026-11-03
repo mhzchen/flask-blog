@@ -51,89 +51,65 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import api from '../api'
+import { storeToRefs } from 'pinia'
+import { usePostsStore } from '../stores/posts'
 import PostCard from '../components/PostCard.vue'
 
 const route = useRoute()
 const router = useRouter()
+const store = usePostsStore()
+// 视图层只声明 store 状态（Pinia 模块化），数据获取集中在 stores/posts.js
+const {
+  items: posts, categories, tags, total, pages, hasPrev, hasNext,
+  page, loading, keyword, categorySlug, tagName,
+} = storeToRefs(store)
 
-const posts = ref([])
-const loading = ref(true)
-const categories = ref([])
-const total = ref(0)
-const page = ref(1)
-const pages = ref(0)
-const hasPrev = ref(false)
-const hasNext = ref(false)
-const keyword = ref(route.query.q || '')
-const categorySlug = ref(route.query.category || '')
-const tags = ref([])
-const tagName = ref(route.query.tag || '')
+// 进入页面时用 URL query 初始化筛选条件（支持分享/刷新保持状态）
+store.keyword = route.query.q || ''
+store.categorySlug = route.query.category || ''
+store.tagName = route.query.tag || ''
 
-async function fetchData() {
-  loading.value = true
-  try {
-    const { data } = await api.get('/posts', {
-      params: {
-        q: keyword.value || undefined,
-        category: categorySlug.value || undefined,
-        tag: tagName.value || undefined,
-        page: page.value,
-      },
-    })
-    posts.value = data.items
-    total.value = data.total
-    pages.value = data.pages
-    hasPrev.value = data.has_prev
-    hasNext.value = data.has_next
-  } finally {
-    loading.value = false
+function _query() {
+  return {
+    q: keyword.value || undefined,
+    category: categorySlug.value || undefined,
+    tag: tagName.value || undefined,
   }
 }
 
-async function fetchCategories() {
-  const { data } = await api.get('/categories')
-  categories.value = data.items
-}
-
 function search() {
-  page.value = 1
-  router.push({ name: 'home', query: { q: keyword.value || undefined, category: categorySlug.value || undefined, tag: tagName.value || undefined } })
-  fetchData()
+  store.resetPage()
+  router.push({ name: 'home', query: _query() })
+  store.fetchList()
 }
 
 function selectCategory(slug) {
-  categorySlug.value = slug
-  page.value = 1
-  router.push({ name: 'home', query: { q: keyword.value || undefined, category: slug || undefined, tag: tagName.value || undefined } })
-  fetchData()
+  store.categorySlug = slug
+  store.resetPage()
+  router.push({ name: 'home', query: _query() })
+  store.fetchList()
 }
 
 function selectTag(name) {
-  tagName.value = name
-  page.value = 1
-  router.push({ name: 'home', query: { q: keyword.value || undefined, category: categorySlug.value || undefined, tag: name || undefined } })
-  fetchData()
-}
-
-async function fetchTags() {
-  const { data } = await api.get('/tags')
-  tags.value = data.items
+  store.tagName = name
+  store.resetPage()
+  router.push({ name: 'home', query: _query() })
+  store.fetchList()
 }
 
 function goPage(n) {
   if (n < 1 || n > pages.value) return
-  page.value = n
+  store.page = n
   router.push({ name: 'home', query: { ...route.query, page: n } })
-  fetchData()
+  store.fetchList()
 }
 
 onMounted(() => {
-  fetchCategories()
-  fetchTags()
-  fetchData()
+  store.fetchCategories()
+  store.fetchTags()
+  store.fetchList()
 })
 </script>
 
