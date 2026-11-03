@@ -53,6 +53,36 @@ def _record_deadletter(app, task_name, args, error):
         pass
 
 
+def task_lock(name, ttl=90):
+    """Redis SETNX 分布式锁：同一任务在多 worker 并发时只允许一个实例执行。
+
+    TTL 自动过期释放（锁服务故障/任务异常都不致死锁）；Redis 不可用时退化为无锁执行。
+    """
+    app = current_app._get_current_object()
+    client = cache._client(app)
+    if client is None:
+        return True
+    try:
+        return bool(client.set('task_lock:' + name, '1', nx=True, ex=ttl))
+    except Exception:
+        return True
+
+
+def _send_alert(app, payload):
+    """发送运维告警到 webhook（复用 ALERT_WEBHOOK_URL）。空 URL 或推送失败静默。"""
+    url = (app.config.get('ALERT_WEBHOOK_URL') or '').strip()
+    if not url:
+        return
+    import urllib.request
+    try:
+        body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+        with urllib.request.urlopen(req, timeout=3):
+            pass
+    except Exception:
+        pass
+
+
 def enqueue(task, *args, **kwargs):
     """安全地投递任务。
 
@@ -140,7 +170,11 @@ def warm_hot_cache():
 
     内部请求首页列表与热门文章详情，让 cached 装饰器把响应写进 Redis；
     冷启动/缓存过期后由 beat 提前填充，避免流量高峰瞬时打穿 DB（与防雪崩呼应）。
+    用 Redis 分布式锁保证多 worker 并发时只一个实例执行预热（防重入）。
     """
+    if not task_lock('warm_hot_cache', ttl=90):
+        current_app.logger.info('[周期任务] 已有实例在执行预热，本次跳过')
+        return 'skipped (lock held)'
     import urllib.request
 
     base = current_app.config.get('BACKEND_INTERNAL_URL', 'http://localhost:8000')
@@ -172,6 +206,13 @@ def prune_deadletter():
         client.ltrim('task_deadletter', 0, limit - 1)
         left = client.llen('task_deadletter') or 0
         current_app.logger.info('[周期任务] 死信清理完成，剩余 %s 条', left)
+        if left >= int(limit * 0.8):
+            _send_alert(current_app._get_current_object(), {
+                'type': 'deadletter_high',
+                'task': 'tasks.prune_deadletter',
+                'error': f'死信列表剩余 {left} 条，超过阈值 {int(limit * 0.8)}，存在永久失败任务需人工处理',
+            })
+            current_app.logger.warning('[周期任务] 死信超阈值，已发告警: %s 条', left)
         return f'pruned, {left} left'
     except Exception:
         current_app.logger.warning('[周期任务] 死信清理失败', exc_info=True)

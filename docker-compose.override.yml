@@ -1,0 +1,64 @@
+# 生产化资源限额（自动被 docker compose 合并；可随时移除本文件恢复默认资源配置）
+# 说明：docker compose 会自动加载同目录下的 docker-compose.override.yml 并与主文件合并，
+# 本文件仅追加 deploy.resources.limits，不修改主 compose 的服务定义。
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  worker:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 384M
+  worker-critical:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 384M
+  beat:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  db:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  frontend:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  prometheus:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  grafana:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  otel-collector:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M

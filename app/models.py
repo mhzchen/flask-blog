@@ -25,12 +25,10 @@ class Category(db.Model):
 class Post(db.Model):
     """博客文章"""
     __tablename__ = 'posts'
-    __table_args__ = (
-        db.Index('ix_posts_content_fulltext', 'content', mysql_using='FULLTEXT'),
-    )
+    __table_args__ = ()
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    title = db.Column(db.String(200), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False, index=False)
     slug = db.Column(db.String(200), unique=True, nullable=False)
     summary = db.Column(db.Text, default='')
     content = db.Column(db.Text, nullable=False)

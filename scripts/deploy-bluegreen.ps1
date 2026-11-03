@@ -6,6 +6,7 @@
 #       flask-blog_default 网络存在（docker compose up 后即满足）。
 param(
   [switch]$Rollback,
+  [switch]$RollbackOnFailure,
   [string]$ProjectDir = (Split-Path -Parent $PSScriptRoot)
 )
 $ErrorActionPreference = 'Stop'
@@ -56,7 +57,11 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 if (-not $ok) {
   docker rm -f "flaskblog-backend-$new" 2>$null | Out-Null
-  throw "blue-green $new readiness probe failed; kept active=$active"
+  # 就绪探针失败：下线新色、保持旧 active，即自动回滚（-RollbackOnFailure 时显式记录）
+  if ($RollbackOnFailure) {
+    Write-Host "[$verb] readiness failed; auto-rollback: removed $new, keeping active=$active"
+  }
+  throw "blue-green $new readiness probe failed; auto-rolled-back, kept active=$active"
 }
 
 # 3) 切换 active 标记 + 停掉旧 active 容器（回滚后旧色即另一色）

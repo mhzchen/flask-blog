@@ -68,7 +68,30 @@ services:
     build: .
     container_name: flaskblog-worker
     restart: unless-stopped
-    command: celery -A celery_worker.celery worker --loglevel=info
+    command: celery -A celery_worker.celery worker --loglevel=info -Q critical,default
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      FLASK_ENV: production
+      CACHE_REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      RATELIMIT_STORAGE_URI: redis://redis:6379/2
+      BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-critical:
+    build: .
+    container_name: flaskblog-worker-critical
+    restart: unless-stopped
+    # 只消费 critical 队列，独占处理维护类/关键任务（预热、死信清理），
+    # 与 default 队列隔离，保证关键任务不被普通业务任务挤占（优先级隔离）。
+    command: celery -A celery_worker.celery worker --loglevel=info -Q critical --concurrency=2
     environment:
       DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
       SECRET_KEY: ${SECRET_KEY}
@@ -152,6 +175,8 @@ services:
     command: ["--config=/etc/otel/config.yml"]
     volumes:
       - ./monitoring/otel-collector.yml:/etc/otel/config.yml:ro
+      # trace 落盘目录：collector 把 span 写到 /tmp/traces.json，即宿主 monitoring/traces
+      - ./monitoring/traces:/tmp
     ports:
       - "4318:4318"
 

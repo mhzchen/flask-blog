@@ -56,6 +56,13 @@ def init_celery(app):
         },
     }
 
+    # 队列隔离：维护类/关键任务路由到 critical 队列，由独立 worker-critical 独占消费；
+    # 其余业务任务默认走 default 队列。以此实现关键任务优先的优先级隔离。
+    celery.conf.task_routes = {
+        'tasks.warm_hot_cache': {'queue': 'critical'},
+        'tasks.prune_deadletter': {'queue': 'critical'},
+    }
+
     # 任务失败告警目标（webhook URL）：空则不推送（测试环境关闭）
     celery.conf['alert_webhook_url'] = app.config.get('ALERT_WEBHOOK_URL', '')
 
