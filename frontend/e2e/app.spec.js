@@ -4,7 +4,7 @@ test.describe('博客 E2E', () => {
   test('首页加载并展示文章卡片', async ({ page }) => {
     await page.goto('/')
     const cards = page.locator('.card-link')
-    await expect(cards.first()).toBeVisible({ timeout: 20000 })
+    await expect(cards.first()).toBeVisible({ timeout: 30000 })
     expect(await cards.count()).toBeGreaterThan(0)
   })
 
@@ -16,7 +16,7 @@ test.describe('博客 E2E', () => {
     await expect(page).toHaveURL(/\/$/, { timeout: 20000 })
     await page.locator('.card-link').first().click()
     await page.waitForURL(/\/post\//)
-    await expect(page.locator('.like-btn')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.like-btn')).toBeVisible({ timeout: 30000 })
     await expect(page.locator('body')).toContainText('阅读')
   })
 

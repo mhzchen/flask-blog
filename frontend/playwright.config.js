@@ -11,5 +11,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'msedge', use: { browserName: 'chromium', channel: 'msedge' } }],
+  // CI 用自带 chromium（npx playwright install chromium）；本地用系统 Edge（无需下载浏览器）
+  projects: process.env.CI
+    ? [{ name: 'chromium', use: { browserName: 'chromium' } }]
+    : [{ name: 'msedge', use: { browserName: 'chromium', channel: 'msedge' } }],
 })
