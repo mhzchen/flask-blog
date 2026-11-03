@@ -107,6 +107,25 @@ class Config:
     # 经 redis pub/sub 跨进程广播；未配置则广播只在本进程（单 worker 场景）
     SOCKETIO_MESSAGE_QUEUE = os.environ.get('SOCKETIO_MESSAGE_QUEUE', '')
 
+    # ---------- 服务降级开关（#58） ----------
+    # 总开关默认 true=依赖故障时降级继续服务（业务不中断）；false=遇故障 fail-fast 抛错
+    SERVICE_DEGRADATION_ENABLED = os.environ.get(
+        'SERVICE_DEGRADATION_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
+    # 各服务降级开关（可单独关闭；关闭后该服务故障即 fail-fast，不再静默降级）
+    DEGRADATION_REDIS_CACHE = os.environ.get('DEGRADATION_REDIS_CACHE', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_REDIS_LOGIN = os.environ.get('DEGRADATION_REDIS_LOGIN', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_REDIS_JWT = os.environ.get('DEGRADATION_REDIS_JWT', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_REDIS_IDEM = os.environ.get('DEGRADATION_REDIS_IDEM', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_MEILISEARCH = os.environ.get('DEGRADATION_MEILISEARCH', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_CELERY = os.environ.get('DEGRADATION_CELERY', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_OTEL = os.environ.get('DEGRADATION_OTEL', 'true').lower() in ('1', 'true', 'yes', 'on')
+    DEGRADATION_DBROUTING = os.environ.get('DEGRADATION_DBROUTING', 'true').lower() in ('1', 'true', 'yes', 'on')
+
+    # ---------- 日志聚合（#58）：日志按天滚动落盘，便于集中采集/聚合查看 ----------
+    LOG_FILE_ENABLED = os.environ.get('LOG_FILE_ENABLED', 'false').lower() in ('1', 'true', 'yes', 'on')
+    LOG_DIR = os.environ.get('LOG_DIR', 'logs')
+    LOG_FILE_BACKUP_DAYS = int(os.environ.get('LOG_FILE_BACKUP_DAYS', '14'))
+
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流
@@ -139,6 +158,7 @@ class TestingConfig(Config):
     SECURITY_HEADERS_ENABLED = False
     METRICS_ENABLED = False
     OTEL_ENABLED = False
+    LOG_FILE_ENABLED = False
     ALERT_WEBHOOK_URL = ''  # 测试不推 webhook
 
 

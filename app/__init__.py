@@ -1,4 +1,5 @@
 import json
+import os
 import logging
 import random
 import time
@@ -181,7 +182,7 @@ class _JsonFormatter(logging.Formatter):
         if trace_id:
             entry['trace_id'] = trace_id
         # 把调用方通过 extra 注入的自定义字段合并进顶层
-        for key in ('rid', 'method', 'path', 'status', 'dur_ms', 'ip', 'ua', 'sql'):
+        for key in ('rid', 'method', 'path', 'status', 'dur_ms', 'ip', 'ua', 'sql', 'service', 'reason'):
             val = getattr(record, key, None)
             if val is not None:
                 entry[key] = val
@@ -191,10 +192,21 @@ class _JsonFormatter(logging.Formatter):
 
 
 def _configure_logging(app):
-    """统一日志：输出为 JSON 结构化日志（一行一条，可被日志采集器直接解析）。"""
+    """统一日志：JSON 结构化日志输出到 stdout；可配按天滚动落盘到 logs/（日志聚合采集）。"""
     handler = logging.StreamHandler()
     handler.setFormatter(_JsonFormatter())
-    app.logger.handlers = [handler]
+    handlers: list[logging.Handler] = [handler]
+    # 日志聚合：LOG_FILE_ENABLED 时按天滚动落盘（backupCount 保留 N 天），容器挂卷后集中采集
+    if app.config.get('LOG_FILE_ENABLED', False):
+        from logging.handlers import TimedRotatingFileHandler
+        log_dir = app.config.get('LOG_DIR', 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        file_handler = TimedRotatingFileHandler(
+            os.path.join(log_dir, 'app.log'), when='midnight',
+            backupCount=app.config.get('LOG_FILE_BACKUP_DAYS', 14), encoding='utf-8')
+        file_handler.setFormatter(_JsonFormatter())
+        handlers.append(file_handler)
+    app.logger.handlers = handlers
     app.logger.setLevel(logging.INFO)
 
 

@@ -8,6 +8,7 @@ key 设计：
 import time
 
 from app.cache import _client
+from app.degradation import degrade
 
 _BLACKLIST_PREFIX = "jwt_blacklist"
 _REVOKE_PREFIX = "jwt_revoke_user"
@@ -24,7 +25,8 @@ def revoke_token(app, jti, remaining_ttl):
         else:
             client.set(f"{_BLACKLIST_PREFIX}:{jti}", "1")
         return True
-    except Exception:
+    except Exception as e:
+        degrade('redis_jwt', 'revoke_token redis down: %s' % e, app)
         return False
 
 
@@ -36,7 +38,8 @@ def revoke_user(app, uid):
     try:
         client.set(f"{_REVOKE_PREFIX}:{uid}", int(time.time()))
         return True
-    except Exception:
+    except Exception as e:
+        degrade('redis_jwt', 'revoke_user redis down: %s' % e, app)
         return False
 
 
@@ -56,5 +59,6 @@ def is_blocked(app, jti, uid, iat):
             if rev and int(rev) > int(iat or 0):
                 return True
         return False
-    except Exception:
+    except Exception as e:
+        degrade('redis_jwt', 'is_blocked redis down -> allow: %s' % e, app)
         return False

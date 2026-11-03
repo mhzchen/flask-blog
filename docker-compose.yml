@@ -66,6 +66,8 @@ services:
       MEILI_URL: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-devMasterKey123}
       SOCKETIO_MESSAGE_QUEUE: redis://redis:6379/3
+      LOG_FILE_ENABLED: "true"
+      LOG_DIR: /app/logs
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       db:
@@ -80,6 +82,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    volumes:
+      - ./logs:/app/logs
     ports:
       - "8000:8000"
 

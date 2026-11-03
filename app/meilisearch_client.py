@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Meilisearch 全文搜索集成（#56）。
+"""Meilisearch 全文搜索集成（#56）+ 统一降级观测（#58）。
 
 - 索引：文章发布/更新/删除时通过 Celery 异步同步到 Meilisearch；
 - 搜索：GET /api/v1/posts?q= 优先走 Meilisearch 得 post_id 集合，再按 id 查库；
-- 降级：Meilisearch 未配置/不可用时回退 MySQL FULLTEXT / SQLite LIKE（原有逻辑）。
+- 降级：Meilisearch 未配置/不可用时回退 MySQL FULLTEXT / SQLite LIKE（原有逻辑），
+  且异常统一经 app.degradation.degrade('meilisearch') 记录（可观测，见 /system/degradations）。
 
 所有对外函数对异常"静默降级"，绝不把搜索依赖拖成业务故障点。
 """
@@ -11,6 +12,8 @@ import os
 from typing import List, Optional
 
 from meilisearch import Client
+
+from app.degradation import degrade
 
 MEILI_INDEX = "posts"
 
@@ -23,7 +26,8 @@ def _client() -> Optional[Client]:
         return None
     try:
         return Client(url, key)
-    except Exception:
+    except Exception as e:
+        degrade('meilisearch', 'client init failed: %s' % e)
         return None
 
 
@@ -40,7 +44,8 @@ def index_post(post_id: int, title: str, summary: str, content: str) -> bool:
             "content": content,
         }])
         return True
-    except Exception:
+    except Exception as e:
+        degrade('meilisearch', 'index_post failed: %s' % e)
         return False
 
 
@@ -52,7 +57,8 @@ def unindex_post(post_id: int) -> bool:
     try:
         client.index(MEILI_INDEX).delete_document(post_id)
         return True
-    except Exception:
+    except Exception as e:
+        degrade('meilisearch', 'unindex_post failed: %s' % e)
         return False
 
 
@@ -64,5 +70,6 @@ def search_post_ids(query: str, limit: int = 200) -> Optional[List[int]]:
     try:
         res = client.index(MEILI_INDEX).search(query, {"limit": limit})
         return [int(h["id"]) for h in res.get("hits", [])]
-    except Exception:
+    except Exception as e:
+        degrade('meilisearch', 'search failed: %s' % e)
         return None

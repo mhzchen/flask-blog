@@ -70,3 +70,13 @@ async def system_status():
         'checks': list(checks),
         'total_ms': total,
     })
+
+
+@system_bp.get('/degradations')
+def system_degradations():
+    """统一服务降级状态汇总（#58）：各服务开关 / 累计降级次数 / 最近原因 / 是否降级。
+
+    供运维从单端点观测当前哪些依赖处于降级（配合 degrade() 接入点与 logs 聚合）。
+    """
+    from app.degradation import degradation_summary
+    return jsonify({'degradations': degradation_summary()})

@@ -12,6 +12,8 @@ from flask import current_app, has_request_context, request
 from redis import Redis
 from redis.exceptions import RedisError
 
+from app.degradation import degrade
+
 
 def _client(app):
     """惰性创建 Redis 客户端，缓存在 app.extensions 里避免重复连接。"""
@@ -60,9 +62,10 @@ def cached(key_prefix, timeout=None):
                     _bump(app, 'cache_misses_total', key_prefix)
                     client.setex(key, ttl, resp.get_data())
                 return resp
-            except RedisError:
+            except RedisError as e:
                 # Redis 故障：降级为直接执行，不抛给用户
                 _bump(app, 'cache_degraded_total', None)
+                degrade('redis_cache', 'redis down, direct-query fallback: %s' % e, app)
                 return fn(*args, **kwargs)
         return wrapper
     return deco

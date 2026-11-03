@@ -380,6 +380,8 @@ def _record_failure(username: str) -> None:
             client.expire(key, lockout)
             return
         except Exception:
+            from app.degradation import degrade
+            degrade('redis_login', 'login lock redis down -> in-proc fallback')
             pass  # Redis 故障，降级进程内 dict
     record = _LOGIN_FAILURES.setdefault(username, [0, 0.0])
     record[0] += 1
@@ -400,6 +402,8 @@ def _is_locked(username: str) -> bool:
                 return False
             return int(val) >= max_failures
         except Exception:
+            from app.degradation import degrade
+            degrade('redis_login', 'login lock redis down -> in-proc fallback')
             pass  # Redis 故障，降级进程内 dict
     record = _LOGIN_FAILURES.get(username)
     if not record:
@@ -420,6 +424,8 @@ def _clear_failures(username: str) -> None:
         try:
             client.delete(f"login_fail:{username}")
         except Exception:
+            from app.degradation import degrade
+            degrade('redis_login', 'login lock redis down -> in-proc fallback')
             pass
     _LOGIN_FAILURES.pop(username, None)
 

@@ -10,6 +10,7 @@ from flask import current_app
 
 from app import cache
 from app.celery_app import celery
+from app.degradation import degrade
 
 
 def _broker_reachable(timeout=1.0):
@@ -101,6 +102,7 @@ def enqueue(task, *args, **kwargs):
             return None
         # broker 不可达时不投递，直接降级同步执行
         if not _broker_reachable():
+            degrade('celery', 'broker unreachable, sync fallback for %s' % task.name)
             current_app.logger.warning(
                 'broker 不可达，降级为同步执行: %s', task.name)
             return task.run(*args, **kwargs)
