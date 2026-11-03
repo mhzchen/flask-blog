@@ -27,3 +27,29 @@ def test_emit_post_new_broadcasts_event(monkeypatch):
     assert captured['event'] == 'post:new'
     assert captured['data'] == post
     assert captured['namespace'] == '/'
+
+
+# ---------- #57 生产化：make_client_manager（跨进程广播 redis 消息队列） ----------
+
+
+def test_make_client_manager_none_when_no_queue():
+    """未配置 SOCKETIO_MESSAGE_QUEUE -> 单进程降级，返回 None。"""
+    from app.socketio import make_client_manager
+    from flask import Flask
+
+    app = Flask(__name__)
+    app.config['SOCKETIO_MESSAGE_QUEUE'] = ''
+    assert make_client_manager(app) is None
+
+
+def test_make_client_manager_redis_manager_when_queue():
+    """配置了 SOCKETIO_MESSAGE_QUEUE -> 返回 RedisManager（redis pub/sub 跨进程广播）。"""
+    from app.socketio import make_client_manager
+    from flask import Flask
+
+    from socketio import RedisManager
+
+    app = Flask(__name__)
+    app.config['SOCKETIO_MESSAGE_QUEUE'] = 'redis://localhost:6379/3'
+    cm = make_client_manager(app)
+    assert isinstance(cm, RedisManager)

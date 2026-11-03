@@ -101,6 +101,12 @@ class Config:
     OTEL_SERVICE_NAME = os.environ.get('OTEL_SERVICE_NAME', 'flask-blog')
     OTEL_SERVICE_VERSION = os.environ.get('OTEL_SERVICE_VERSION', '1.0.0')
 
+
+    # ---------- WebSocket 实时推送（生产化） ----------
+    # 多 worker / 多实例广播需配 SOCKETIO_MESSAGE_QUEUE（redis 消息队列），Flask-SocketIO
+    # 经 redis pub/sub 跨进程广播；未配置则广播只在本进程（单 worker 场景）
+    SOCKETIO_MESSAGE_QUEUE = os.environ.get('SOCKETIO_MESSAGE_QUEUE', '')
+
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流

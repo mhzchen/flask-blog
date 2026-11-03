@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
-"""WebSocket 实时推送（Flask-SocketIO）。
+"""WebSocket 实时推送（Flask-SocketIO）——生产化。
 
-- 开发：async_mode='threading'，socketio.run(app) 同时提供 HTTP + WebSocket。
-- 生产：需 ASGI server（hypercorn）挂载本 socketio 应用；多 worker / 多实例广播
-  必须配置 redis message queue 适配器（SocketIO.AsyncRedisManager），否则广播不跨进程。
-
-用法：
-    评论/文章发布时调用 emit_comment_new / emit_post_new 广播事件，
-    前端 socket.io-client 订阅 'comment:new' / 'post:new' 实时展示。
+- 单进程（开发 / 单 worker）：async_mode='threading'，socketio.run(app) 同时提供 HTTP + WS。
+- 多 worker / 多实例：必须配 SOCKETIO_MESSAGE_QUEUE（redis 消息队列），Flask-SocketIO
+  经 redis pub/sub 让广播跨进程生效；配了 message queue 时用 RedisManager（threading
+  同步 Server 对应的同步管理器）。未配则广播只在本进程内。
 """
 from flask_socketio import SocketIO
 
 socketio = SocketIO(async_mode='threading')
+
+
+def make_client_manager(app):
+    """按配置构造跨进程广播用的 redis 消息队列 manager；未配置返回 None（单进程降级）。"""
+    url = app.config.get('SOCKETIO_MESSAGE_QUEUE')
+    if not url:
+        return None
+    from socketio import RedisManager
+    return RedisManager(url)
 
 
 def register_socket_events():

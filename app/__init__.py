@@ -21,7 +21,7 @@ from app.errors import register_error_handlers
 from app.metrics import register_metrics
 from app.openapi import register_openapi_routes
 from app.security import register_security_headers
-from app.socketio import register_socket_events, socketio
+from app.socketio import make_client_manager, register_socket_events, socketio
 from app.telemetry import _current_trace_id, init_telemetry
 
 db = SQLAlchemy(session_options={'class_': RoutingSession})
@@ -83,8 +83,12 @@ def create_app(config_class=None):
     # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
     init_celery(app)
 
-    # WebSocket 实时推送（Flask-SocketIO；ws 端点 /socket.io 需以 socketio.run/ASGI 提供）
-    socketio.init_app(app, cors_allowed_origins=app.config.get('CORS_ORIGINS', '*'))
+    # WebSocket 实时推送（Flask-SocketIO；/socket.io 由 WSGI server 提供，多 worker/多实例广播靠 SOCKETIO_MESSAGE_QUEUE redis 消息队列跨进程分发）
+    socketio.init_app(
+        app,
+        cors_allowed_origins=app.config.get('CORS_ORIGINS', '*'),
+        client_manager=make_client_manager(app),
+    )
     register_socket_events()
 
     # 注册 API 蓝图（在 create_app 内部导入，避免循环导入）
