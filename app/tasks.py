@@ -132,3 +132,47 @@ def periodic_ping():
     """定时心跳任务（由 Celery Beat 每分钟触发），演示周期调度。"""
     current_app.logger.info('[周期任务] heartbeat at %s', current_app.config.get('SECRET_KEY', ''))
     return 'pong'
+
+
+@celery.task(name='tasks.warm_hot_cache')
+def warm_hot_cache():
+    """周期预热热点缓存（Celery Beat 每 2 分钟触发）。
+
+    内部请求首页列表与热门文章详情，让 cached 装饰器把响应写进 Redis；
+    冷启动/缓存过期后由 beat 提前填充，避免流量高峰瞬时打穿 DB（与防雪崩呼应）。
+    """
+    import urllib.request
+
+    base = current_app.config.get('BACKEND_INTERNAL_URL', 'http://localhost:8000')
+    warmed = 0
+    for path in ('/api/posts', '/api/posts/1', '/api/posts/2', '/api/posts/3'):
+        try:
+            with urllib.request.urlopen(base + path, timeout=5) as resp:
+                if resp.status == 200:
+                    warmed += 1
+        except Exception:
+            current_app.logger.warning('[周期任务] 预热失败: %s', path)
+    current_app.logger.info('[周期任务] 热点缓存预热完成，命中 %s 条路径', warmed)
+    return f'warmed {warmed} paths'
+
+
+@celery.task(name='tasks.prune_deadletter')
+def prune_deadletter():
+    """周期清理死信列表（Celery Beat 每小时触发）。
+
+    重试耗尽仍失败的永久错误会进 Redis list `task_deadletter`；
+    本任务用 ltrim 只保留最近 DEADLETTER_MAX 条，防止列表无限膨胀。
+    """
+    app = current_app._get_current_object()
+    client = cache._client(app)
+    if client is None:
+        return 'no cache, skipped'
+    limit = int(current_app.config.get('DEADLETTER_MAX', 100))
+    try:
+        client.ltrim('task_deadletter', 0, limit - 1)
+        left = client.llen('task_deadletter') or 0
+        current_app.logger.info('[周期任务] 死信清理完成，剩余 %s 条', left)
+        return f'pruned, {left} left'
+    except Exception:
+        current_app.logger.warning('[周期任务] 死信清理失败', exc_info=True)
+        return 'prune failed'

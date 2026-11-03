@@ -49,6 +49,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       RATELIMIT_STORAGE_URI: redis://redis:6379/2
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       db:
         condition: service_healthy
@@ -77,6 +78,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       RATELIMIT_STORAGE_URI: redis://redis:6379/2
+      BACKEND_INTERNAL_URL: http://backend:8000
     depends_on:
       db:
         condition: service_healthy
@@ -97,6 +99,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       RATELIMIT_STORAGE_URI: redis://redis:6379/2
+      BACKEND_INTERNAL_URL: http://backend:8000
     depends_on:
       db:
         condition: service_healthy
@@ -112,6 +115,48 @@ services:
     ports:
       - "8080:80"
 
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: flaskblog-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: flaskblog-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.107.0
+    container_name: flaskblog-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel/config.yml"]
+    volumes:
+      - ./monitoring/otel-collector.yml:/etc/otel/config.yml:ro
+    ports:
+      - "4318:4318"
+
+
 volumes:
   db_data:
   redis_data:
+  grafana_data:

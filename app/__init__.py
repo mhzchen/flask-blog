@@ -105,6 +105,30 @@ def create_app(config_class=None):
     # 注册 Prometheus 指标端点 /metrics（可观测性）
     register_metrics(app)
 
+    @app.post('/api/internal/alerts')
+    def _internal_alerts():
+        """模拟 webhook 告警接收端：记录收到的告警。
+
+        生产可去掉本端点，把 ALERT_WEBHOOK_URL 指向真实告警网关（企业微信/钉钉/Slack 机器人）。
+        """
+        data = request.get_json(silent=True) or {}
+        app.logger.warning(
+            'alert_received',
+            extra={'alert': json.dumps(data, ensure_ascii=False)[:500]},
+        )
+        return {'ok': True}, 200
+
+    @app.post('/api/vitals')
+    def _web_vitals():
+        # 接收前端 Web Vitals 上报（CLS/FCP/INP/LCP/TTFB），记 INFO 日志。
+        # 仅做采集落日志，便于观察真实用户性能；无独立存储。
+        data = request.get_json(silent=True) or {}
+        app.logger.info(
+            'web_vitals',
+            extra={'vitals': json.dumps(data, ensure_ascii=False)[:300]},
+        )
+        return {'ok': True}, 200
+
     @app.get('/health')
     def health():
         """存活探针：进程活着即返回 ok（不含依赖检查，供负载均衡初判）。"""

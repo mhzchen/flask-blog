@@ -1,0 +1,24 @@
+groups:
+  - name: flask-blog
+    rules:
+      - alert: BackendDown
+        expr: up{job="flask-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "backend 不可达"
+      - alert: High5xxErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (path) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.path }} 5xx 错误率偏高"
+      - alert: HighInflight
+        expr: http_requests_inflight > 50
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "并发请求数超过 50"

@@ -66,6 +66,15 @@ class Config:
         'CELERY_TASK_ALWAYS_EAGER', 'false').lower() in ('1', 'true', 'yes', 'on')
     CELERY_TASK_EAGER_PROPAGATES = os.environ.get(
         'CELERY_TASK_EAGER_PROPAGATES', 'false').lower() in ('1', 'true', 'yes', 'on')
+
+    # ---------- 异步任务失败告警 ----------
+    # Celery 任务失败时推送到此 webhook（容器内默认指向 backend 自身的 /api/internal/alerts 作为接收端，
+    # 便于本地闭环验证；生产可改为真实告警网关 URL——企业微信/钉钉/Slack 机器人）。
+    ALERT_WEBHOOK_URL = os.environ.get('ALERT_WEBHOOK_URL', 'http://backend:8000/api/internal/alerts')
+    # 周期任务预热缓存时，内部请求 backend 用的基址（容器网络用 backend:8000，本地开发用 localhost:8000）
+    BACKEND_INTERNAL_URL = os.environ.get('BACKEND_INTERNAL_URL', 'http://localhost:8000')
+    # 死信列表保留的最大条数（周期任务 ltrim 清理，防无限膨胀）
+    DEADLETTER_MAX = int(os.environ.get('DEADLETTER_MAX', 100))
     # ---------- 安全纵深 ----------
     # 统一安全响应头开关（生产开启；测试可关避免断言干扰）
     SECURITY_HEADERS_ENABLED = os.environ.get(
@@ -124,6 +133,7 @@ class TestingConfig(Config):
     SECURITY_HEADERS_ENABLED = False
     METRICS_ENABLED = False
     OTEL_ENABLED = False
+    ALERT_WEBHOOK_URL = ''  # 测试不推 webhook
 
 
 class ProductionConfig(Config):

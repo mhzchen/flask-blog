@@ -37,15 +37,31 @@ def init_celery(app):
         include=['app.tasks'],
     )
 
-    # 定时任务（Celery Beat 使用）：每分钟心跳，演示周期调度
+    # 定时任务（Celery Beat 使用）：
+    # - heartbeat-every-minute   每分钟心跳（保活探测）
+    # - warm-hot-cache-2min      每 2 分钟预热热点缓存（首页列表/热门详情），防冷启动打穿 DB
+    # - prune-deadletter-hourly  每小时清理死信列表，只保留最近 DEADLETTER_MAX 条
     celery.conf.beat_schedule = {
         'heartbeat-every-minute': {
             'task': 'tasks.periodic_ping',
             'schedule': 60.0,
         },
+        'warm-hot-cache-2min': {
+            'task': 'tasks.warm_hot_cache',
+            'schedule': 120.0,
+        },
+        'prune-deadletter-hourly': {
+            'task': 'tasks.prune_deadletter',
+            'schedule': 3600.0,
+        },
     }
 
+    # 任务失败告警目标（webhook URL）：空则不推送（测试环境关闭）
+    celery.conf['alert_webhook_url'] = app.config.get('ALERT_WEBHOOK_URL', '')
+
     app.extensions['celery'] = celery
+
+    _register_failure_webhook(celery)
 
     # 让每个任务在 Flask 应用上下文里执行，任务里才能用 db / current_app
     class ContextTask(celery.Task):
@@ -57,3 +73,42 @@ def init_celery(app):
 
     celery.Task = ContextTask
     return celery
+
+
+def _register_failure_webhook(celery):
+    """任务失败时推送告警到 webhook（幂等注册，重复调用不重复注册）。
+
+    失败信息：task 名称 / task_id / 异常摘要 / 参数。推送失败绝不抛错，
+    因为告警通道故障不能反过来影响任务执行/worker 存活。
+    """
+    from celery.signals import task_failure
+
+    if getattr(_register_failure_webhook, '_registered', False):
+        return
+    _register_failure_webhook._registered = True
+
+    @task_failure.connect
+    def _on_task_failure(sender=None, task_id=None, args=None, kwargs=None, einfo=None, **kw):
+        url = (celery.conf.get('alert_webhook_url') or '').strip()
+        if not url:
+            return
+        name = getattr(sender, 'name', None) or 'unknown'
+        payload = {
+            'type': 'celery_task_failure',
+            'task': name,
+            'task_id': task_id,
+            'args': list(args or []),
+            'kwargs': dict(kwargs or {}),
+            'error': ((einfo and str(einfo.exception)) or '') if einfo is not None else '',
+        }
+        import json
+        import urllib.request
+        try:
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            req = urllib.request.Request(
+                url, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+        except Exception:
+            # 告警推送失败不能影响 worker/任务本身
+            pass

@@ -7,21 +7,40 @@ import api from '../api'
  * 视图层只声明使用，不在组件内散落数据获取逻辑。
  */
 export const usePostsStore = defineStore('posts', {
-  state: () => ({
-    items: [],
-    total: 0,
-    pages: 0,
-    hasPrev: false,
-    hasNext: false,
-    page: 1,
-    loading: false,
-    categories: [],
-    tags: [],
-    keyword: '',
-    categorySlug: '',
-    tagName: '',
-  }),
+  state: () => {
+    let saved = {}
+    try {
+      saved = JSON.parse(localStorage.getItem('posts_filter') || '{}')
+    } catch {
+      saved = {}
+    }
+    return {
+      items: [],
+      total: 0,
+      pages: 0,
+      hasPrev: false,
+      hasNext: false,
+      page: Number(saved.page) || 1,
+      loading: false,
+      categories: [],
+      tags: [],
+      keyword: saved.keyword || '',
+      categorySlug: saved.categorySlug || '',
+      tagName: saved.tagName || '',
+    }
+  },
   actions: {
+    /** 把当前筛选条件（关键词/分类/标签/页码）写入 localStorage，下次进入自动恢复。 */
+    _persistFilter() {
+      try {
+        localStorage.setItem('posts_filter', JSON.stringify({
+          keyword: this.keyword,
+          categorySlug: this.categorySlug,
+          tagName: this.tagName,
+          page: this.page,
+        }))
+      } catch { /* localStorage 不可用时静默跳过 */ }
+    },
     /** 按当前筛选条件拉取文章列表（读接口，走后端分页/缓存）。 */
     async fetchList() {
       this.loading = true
@@ -41,6 +60,7 @@ export const usePostsStore = defineStore('posts', {
         this.hasNext = data.has_next
       } finally {
         this.loading = false
+        this._persistFilter()
       }
     },
     /** 拉取全部分类（侧栏筛选）。 */
@@ -56,6 +76,7 @@ export const usePostsStore = defineStore('posts', {
     /** 回到第一页（搜索/切换分类标签时调用）。 */
     resetPage() {
       this.page = 1
+      this._persistFilter()
     },
   },
 })
