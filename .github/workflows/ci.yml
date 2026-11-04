@@ -125,7 +125,7 @@ jobs:
     name: Publish Docker Images (GHCR)
     runs-on: ubuntu-latest
     # 仅在推送到 main 且前置质量门全绿后发布镜像，供蓝绿/生产部署拉取
-    needs: [lint-typecheck, test, migration, frontend]
+    needs: [lint-typecheck, test, migration, frontend, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read

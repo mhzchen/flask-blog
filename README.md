@@ -310,3 +310,16 @@ flask --app wsgi db upgrade
 - **#61 测试**：`tests/test_ratelimit.py` 保留降级单测（Redis 不可达 → 自动降级内存 + 降级记录）；因 Flask-Limiter 模块级单例计数跨 `create_app` 泄漏无法在单测中干净隔离，计数型行为一律改由真实 HTTP 真验覆盖。
 - **#61 真验**：真实 Redis（6380/db4）并发 15 次 login → 10×200 + 5×429，429 body 含 `error_code=RATE_LIMITED`、`X-RateLimit-Limit=10`、`X-RateLimit-Remaining=0`，成功 200 同样带头；Redis 停止启动自动降级 memory 并记录 `redis_ratelimit`；全局默认限流（`RATELIMIT_DEFAULT="3 per minute"`）对未配置端点 posts 第 4 次返回 429 + 头（3/0）+ envelope。
 - **#61 质量门**：全量 pytest 通过（223 passed）、coverage 90.26% ≥ 90%、ruff 全过、mypy Success(30 source files)。
+
+## 本轮：#62 性能基线复测（对比 #17） / #63 CI E2E 补强（纳入发布门禁 + 真验）
+
+- **#62 压测复测（对比 #17 基线）**：同参数（并发 20 / 总量 500 / warmup 20），真实 Redis + MySQL 下：
+  - 列表 `/api/v1/posts` → **154 QPS**（avg 126.7 / p50 107.8 / p95 200 / p99 340.6 ms，0/500 错误），对比 #17 基线 79 QPS → **≈1.95×**（#17 时路径无 `/api/v1` 前缀，#51 后加）。
+  - 详情 `/api/v1/posts/1` → **37 QPS**（avg 522.4 / p50 444.2 / p95 986.7 / p99 1295.7 ms，0/500 错误），对比 #17 基线 24 QPS → **≈1.54×**（#18 起详情有 60s Redis 缓存）。
+  - **迁移补齐**：详情接口初测 500/500 全错，定位为 3307 库停在 0008、缺 #60 的 Alembic 0009（users 加 `github_id`/`github_username` 列）；`flask db upgrade` 补跑 `0008 -> 0009` 后详情恢复 200（列属 #60 已提交代码，库同步到迁移链最新即可，无代码改动）。
+- **#63 E2E 纳入发布门禁**：`.github/workflows/ci.yml` 的 `publish-docker` job `needs` 由 `[lint-typecheck, test, migration, frontend]` 扩展为 `[lint-typecheck, test, migration, frontend, e2e]`——E2E 从此成为发布镜像/蓝绿部署的硬门禁。
+- **#63 构建 bug 修复**：`requirements.txt` L27 `meilisearch>=1.0` 是预置缺陷——清华源与默认 PyPI 均只有 0.43.0（`pip index versions` 验证），`docker build` 直接 `ERROR: No matching distribution found`。改为 `meilisearch>=0.40,<1.0` 后重建成功（安装 0.43.0）。修复前本地与 CI 的 `docker build` 全挂，是 E2E 真验与发布链闭环的必要前置。
+- **#63 E2E 稳定性修复**（真验发现并落地）：
+  - `frontend/playwright.config.js` 设 `workers: 1`（串行）：2 workers 并发登录同一账号时后端登录请求变慢（dur 2-4s、slow_request）且前端偶发把慢响应判为「登录失败，请重试」导致 login helper 停在 /login；串行后稳定。
+  - `frontend/e2e/workflow.spec.js` 评论用例 selector 由 `textarea[placeholder="写下你的评论..."]`（英文点）改为 `#comment-text`：#59 i18n 后 placeholder 是中文省略号「写下你的评论…」（U+2026），旧 selector 永不匹配导致 45s timeout；实际 textarea 一直在 DOM 中（提交按钮因空内容 disabled，fill 后自动启用）。
+- **#63 E2E 真验**：本地 msedge 通道跑全量 6 条（首页/搜索/登录详情/登录回首页/发帖/评论）**6 passed**；backend/frontend 新镜像（`docker compose build` + `up --no-deps -d --wait`）下闭环通过。

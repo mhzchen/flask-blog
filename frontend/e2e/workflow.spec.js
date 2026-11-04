@@ -44,7 +44,7 @@ test.describe('博客真实链路 E2E', () => {
     await page.locator('.card-link').first().click()
     await page.waitForURL(/\/post\//)
     const c = `E2E 评论 ${T}`
-    await page.locator('textarea[placeholder="写下你的评论..."]').fill(c)
+    await page.locator('#comment-text').fill(c)
     await page.locator('button', { hasText: '发表评论' }).click()
     await expect(page.locator('body')).toContainText(c, { timeout: 20000 })
   })

@@ -24,4 +24,4 @@ opentelemetry-instrumentation-sqlalchemy>=0.47
 opentelemetry-instrumentation-redis>=0.47
 opentelemetry-instrumentation-celery>=0.47
 opentelemetry-exporter-otlp-proto-http>=1.24
-meilisearch>=1.0  # 全文搜索(Meilisearch, #56)
+meilisearch>=0.40,<1.0  # 全文搜索(Meilisearch, #56)
