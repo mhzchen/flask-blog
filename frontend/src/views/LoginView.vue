@@ -1,27 +1,29 @@
 <template>
   <div class="auth-form">
-    <h2>登录</h2>
-    <p v-if="error" class="error-tip">{{ error }}</p>
+    <h1>{{ t('auth.login') }}</h1>
+    <p v-if="error" class="error-tip" role="alert">{{ error }}</p>
     <form @submit.prevent="handleLogin">
       <div class="form-group">
-        <label>用户名</label>
-        <input v-model="username" type="text" class="form-input" required />
+        <label for="login-username">{{ t('auth.username') }}</label>
+        <input id="login-username" v-model="username" type="text" class="form-input" :autocomplete="'username'" required />
       </div>
       <div class="form-group">
-        <label>密码</label>
-        <input v-model="password" type="password" class="form-input" required />
+        <label for="login-password">{{ t('auth.password') }}</label>
+        <input id="login-password" v-model="password" type="password" class="form-input" :autocomplete="'current-password'" required />
       </div>
-      <button type="submit" class="btn-submit" :disabled="loading">{{ loading ? '登录中...' : '登录' }}</button>
+      <button type="submit" class="btn-submit" :disabled="loading">{{ loading ? t('auth.loggingIn') : t('auth.login') }}</button>
     </form>
-    <p class="form-footer">还没有账号？<router-link to="/register">立即注册</router-link></p>
+    <p class="form-footer">{{ t('auth.noAccount') }}<router-link to="/register">{{ t('auth.registerNow') }}</router-link></p>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 
+const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
@@ -38,7 +40,7 @@ async function handleLogin() {
     await auth.login(username.value, password.value)
     router.push(route.query.redirect || '/')
   } catch (e) {
-    error.value = e.response?.data?.error || '登录失败，请重试'
+    error.value = e.response?.data?.error || t('auth.loginFailed')
   } finally {
     loading.value = false
   }

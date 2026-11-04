@@ -1,36 +1,38 @@
 <template>
   <div class="auth-form">
-    <h2>注册</h2>
-    <p v-if="error" class="error-tip">{{ error }}</p>
+    <h1>{{ t('auth.register') }}</h1>
+    <p v-if="error" class="error-tip" role="alert">{{ error }}</p>
     <form @submit.prevent="handleRegister">
       <div class="form-group">
-        <label>用户名</label>
-        <input v-model="username" type="text" class="form-input" required minlength="3" />
+        <label for="reg-username">{{ t('auth.username') }}</label>
+        <input id="reg-username" v-model="username" type="text" class="form-input" :autocomplete="'username'" required minlength="3" />
       </div>
       <div class="form-group">
-        <label>邮箱</label>
-        <input v-model="email" type="email" class="form-input" required />
+        <label for="reg-email">{{ t('auth.email') }}</label>
+        <input id="reg-email" v-model="email" type="email" class="form-input" :autocomplete="'email'" required />
       </div>
       <div class="form-group">
-        <label>密码</label>
-        <input v-model="password" type="password" class="form-input" required minlength="6" />
+        <label for="reg-password">{{ t('auth.password') }}</label>
+        <input id="reg-password" v-model="password" type="password" class="form-input" :autocomplete="'new-password'" required minlength="6" />
       </div>
       <div class="form-group">
-        <label>确认密码</label>
-        <input v-model="confirmPassword" type="password" class="form-input" required />
-        <span v-if="password && confirmPassword && password !== confirmPassword" class="field-error">两次输入的密码不一致</span>
+        <label for="reg-confirm">{{ t('auth.confirm') }}</label>
+        <input id="reg-confirm" v-model="confirmPassword" type="password" class="form-input" :autocomplete="'new-password'" required />
+        <span v-if="password && confirmPassword && password !== confirmPassword" class="field-error" aria-live="polite">{{ t('auth.mismatch') }}</span>
       </div>
-      <button type="submit" class="btn-submit" :disabled="loading">{{ loading ? '注册中...' : '注册' }}</button>
+      <button type="submit" class="btn-submit" :disabled="loading">{{ loading ? t('auth.registering') : t('auth.register') }}</button>
     </form>
-    <p class="form-footer">已有账号？<router-link to="/login">立即登录</router-link></p>
+    <p class="form-footer">{{ t('auth.haveAccount') }}<router-link to="/login">{{ t('auth.loginNow') }}</router-link></p>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 
+const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -43,7 +45,7 @@ const error = ref('')
 
 async function handleRegister() {
   if (password.value !== confirmPassword.value) {
-    error.value = '两次输入的密码不一致'
+    error.value = t('auth.mismatch')
     return
   }
   loading.value = true
@@ -52,7 +54,7 @@ async function handleRegister() {
     await auth.register({ username: username.value, email: email.value, password: password.value })
     router.push('/')
   } catch (e) {
-    error.value = e.response?.data?.error || '注册失败，请重试'
+    error.value = e.response?.data?.error || t('auth.registerFailed')
   } finally {
     loading.value = false
   }

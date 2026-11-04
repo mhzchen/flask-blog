@@ -1,6 +1,6 @@
 <template>
-  <router-link :to="`/post/${post.id}`" class="card-link">
-    <div class="article-card">
+  <router-link :to="`/post/${post.id}`" class="card-link" :aria-label="post.title">
+    <article class="article-card">
       <span class="card-category">{{ post.category }}</span>
       <h3>{{ post.title }}</h3>
       <p>{{ post.summary }}</p>
@@ -8,7 +8,7 @@
         <span v-for="t in post.tags" :key="t" class="card-tag">{{ t }}</span>
       </div>
       <span class="card-date">{{ post.created_at }}</span>
-    </div>
+    </article>
   </router-link>
 </template>
 
@@ -19,7 +19,7 @@ defineProps({ post: { type: Object, required: true } })
 <style scoped>
 .card-tags { margin: 6px 0; }
 .card-tag {
-  display: inline-block; background: #eef3ff; color: #3a6ea5;
+  display: inline-block; background: var(--tag-bg); color: var(--tag-fg);
   font-size: 12px; padding: 2px 8px; border-radius: 10px; margin-right: 6px;
 }
 </style>

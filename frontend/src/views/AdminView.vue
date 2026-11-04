@@ -1,19 +1,19 @@
 <template>
   <div>
-    <h2 class="section-title">后台管理</h2>
+    <h2 class="section-title">{{ t('admin.title') }}</h2>
 
-    <div class="admin-tabs">
-      <button :class="{ active: tab === 'posts' }" @click="tab = 'posts'">文章管理</button>
-      <button :class="{ active: tab === 'categories' }" @click="tab = 'categories'">分类管理</button>
+    <div class="admin-tabs" role="tablist">
+      <button :class="{ active: tab === 'posts' }" @click="tab = 'posts'" role="tab" :aria-selected="tab === 'posts'">{{ t('admin.posts') }}</button>
+      <button :class="{ active: tab === 'categories' }" @click="tab = 'categories'" role="tab" :aria-selected="tab === 'categories'">{{ t('admin.cats') }}</button>
     </div>
 
     <!-- ===== 文章管理 ===== -->
     <div v-if="tab === 'posts'">
-      <button class="btn-add" @click="openNewPost">＋ 新建文章</button>
+      <button class="btn-add" @click="openNewPost">{{ t('admin.newPost') }}</button>
 
       <table class="admin-table">
         <thead>
-          <tr><th>ID</th><th>标题</th><th>分类</th><th>发布时间</th><th>操作</th></tr>
+          <tr><th>{{ t('admin.id') }}</th><th>{{ t('admin.title') }}</th><th>{{ t('admin.category') }}</th><th>{{ t('admin.published') }}</th><th>{{ t('admin.ops') }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="post in posts" :key="post.id">
@@ -22,45 +22,45 @@
             <td>{{ post.category }}</td>
             <td>{{ post.created_at }}</td>
             <td>
-              <button class="btn-sm" @click="openEditPost(post)">编辑</button>
-              <button class="btn-sm danger" @click="deletePost(post)">删除</button>
+              <button class="btn-sm" @click="openEditPost(post)">{{ t('admin.editPost') }}</button>
+              <button class="btn-sm danger" @click="deletePost(post)">{{ t('admin.delete') }}</button>
             </td>
           </tr>
-          <tr v-if="!posts.length"><td colspan="5" class="empty-tip">暂无文章</td></tr>
+          <tr v-if="!posts.length"><td colspan="5" class="empty-tip">{{ t('admin.none') }}</td></tr>
         </tbody>
       </table>
 
       <!-- 文章编辑弹窗 -->
       <div v-if="postModal.show" class="modal-mask">
-        <div class="modal">
-          <h3>{{ postModal.editId ? '编辑文章' : '新建文章' }}</h3>
+        <div class="modal" role="dialog" aria-modal="true">
+          <h3>{{ postModal.editId ? t('admin.editPost') : t('admin.newArticle') }}</h3>
           <div class="form-group">
-            <label>标题</label>
-            <input v-model="postForm.title" class="form-input" required />
+            <label for="ap-title">{{ t('admin.title') }}</label>
+            <input id="ap-title" v-model="postForm.title" class="form-input" required />
           </div>
           <div class="form-group">
-            <label>分类</label>
-            <select v-model="postForm.category_id" class="form-input">
+            <label for="ap-cat">{{ t('admin.category') }}</label>
+            <select id="ap-cat" v-model="postForm.category_id" class="form-input">
               <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>标签（用逗号分隔）</label>
-            <input v-model="postForm.tags" class="form-input" placeholder="如：Flask, Web" />
+            <label for="ap-tags">{{ t('admin.tags') }}</label>
+            <input id="ap-tags" v-model="postForm.tags" class="form-input" placeholder="Flask, Web" />
           </div>
           <div class="form-group">
-            <label>摘要</label>
-            <input v-model="postForm.summary" class="form-input" />
+            <label for="ap-summary">{{ t('admin.summary') }}</label>
+            <input id="ap-summary" v-model="postForm.summary" class="form-input" />
           </div>
           <div class="form-group">
-            <label>正文（支持 HTML）</label>
-            <textarea v-model="postForm.content" class="form-input" rows="6"></textarea>
+            <label for="ap-content">{{ t('admin.content') }}</label>
+            <textarea id="ap-content" v-model="postForm.content" class="form-input" rows="6"></textarea>
           </div>
-          <p v-if="postModal.error" class="error-tip">{{ postModal.error }}</p>
+          <p v-if="postModal.error" class="error-tip" role="alert">{{ postModal.error }}</p>
           <div class="modal-actions">
-            <button class="btn-sm" @click="postModal.show = false">取消</button>
+            <button class="btn-sm" @click="postModal.show = false">{{ t('admin.cancel') }}</button>
             <button class="btn-sm primary" @click="savePost" :disabled="postModal.saving">
-              {{ postModal.saving ? '保存中...' : '保存' }}
+              {{ postModal.saving ? t('admin.saving') : t('admin.save') }}
             </button>
           </div>
         </div>
@@ -69,11 +69,11 @@
 
     <!-- ===== 分类管理 ===== -->
     <div v-if="tab === 'categories'">
-      <button class="btn-add" @click="openNewCategory">＋ 新建分类</button>
+      <button class="btn-add" @click="openNewCategory">{{ t('admin.newCat') }}</button>
 
       <table class="admin-table">
         <thead>
-          <tr><th>ID</th><th>名称</th><th>slug</th><th>操作</th></tr>
+          <tr><th>{{ t('admin.id') }}</th><th>{{ t('admin.name') }}</th><th>slug</th><th>{{ t('admin.ops') }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="cat in categories" :key="cat.id">
@@ -81,30 +81,30 @@
             <td>{{ cat.name }}</td>
             <td>{{ cat.slug }}</td>
             <td>
-              <button class="btn-sm" @click="openEditCategory(cat)">编辑</button>
-              <button class="btn-sm danger" @click="deleteCategory(cat)">删除</button>
+              <button class="btn-sm" @click="openEditCategory(cat)">{{ t('admin.editCat') }}</button>
+              <button class="btn-sm danger" @click="deleteCategory(cat)">{{ t('admin.delete') }}</button>
             </td>
           </tr>
-          <tr v-if="!categories.length"><td colspan="4" class="empty-tip">暂无分类</td></tr>
+          <tr v-if="!categories.length"><td colspan="4" class="empty-tip">{{ t('admin.noCats') }}</td></tr>
         </tbody>
       </table>
 
       <div v-if="catModal.show" class="modal-mask">
-        <div class="modal">
-          <h3>{{ catModal.editId ? '编辑分类' : '新建分类' }}</h3>
+        <div class="modal" role="dialog" aria-modal="true">
+          <h3>{{ catModal.editId ? t('admin.editCat') : t('admin.newCateg') }}</h3>
           <div class="form-group">
-            <label>名称</label>
-            <input v-model="catForm.name" class="form-input" required />
+            <label for="ac-name">{{ t('admin.name') }}</label>
+            <input id="ac-name" v-model="catForm.name" class="form-input" required />
           </div>
           <div class="form-group">
-            <label>slug（可选，留空自动生成）</label>
-            <input v-model="catForm.slug" class="form-input" />
+            <label for="ac-slug">{{ t('admin.slug') }}</label>
+            <input id="ac-slug" v-model="catForm.slug" class="form-input" />
           </div>
-          <p v-if="catModal.error" class="error-tip">{{ catModal.error }}</p>
+          <p v-if="catModal.error" class="error-tip" role="alert">{{ catModal.error }}</p>
           <div class="modal-actions">
-            <button class="btn-sm" @click="catModal.show = false">取消</button>
+            <button class="btn-sm" @click="catModal.show = false">{{ t('admin.cancel') }}</button>
             <button class="btn-sm primary" @click="saveCategory" :disabled="catModal.saving">
-              {{ catModal.saving ? '保存中...' : '保存' }}
+              {{ catModal.saving ? t('admin.saving') : t('admin.save') }}
             </button>
           </div>
         </div>
@@ -115,8 +115,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import api from '../api'
 
+const { t } = useI18n()
 const tab = ref('posts')
 const posts = ref([])
 const categories = ref([])
@@ -162,14 +164,14 @@ async function savePost() {
     postModal.value.show = false
     await fetchPosts()
   } catch (e) {
-    postModal.value.error = e.response?.data?.error || '保存失败'
+    postModal.value.error = e.response?.data?.error || t('admin.saveFailed')
   } finally {
     postModal.value.saving = false
   }
 }
 
 async function deletePost(post) {
-  if (!confirm(`确定删除文章「${post.title}」？`)) return
+  if (!confirm(t('admin.confirmDeletePost', { title: post.title }))) return
   await api.delete(`/admin/posts/${post.id}`)
   await fetchPosts()
 }
@@ -196,14 +198,14 @@ async function saveCategory() {
     catModal.value.show = false
     await fetchCategories()
   } catch (e) {
-    catModal.value.error = e.response?.data?.error || '保存失败'
+    catModal.value.error = e.response?.data?.error || t('admin.saveFailed')
   } finally {
     catModal.value.saving = false
   }
 }
 
 async function deleteCategory(cat) {
-  if (!confirm(`确定删除分类「${cat.name}」？`)) return
+  if (!confirm(t('admin.confirmDeleteCat', { name: cat.name }))) return
   await api.delete(`/admin/categories/${cat.id}`)
   await fetchCategories()
   await fetchPosts()
@@ -218,19 +220,19 @@ onMounted(async () => {
 <style scoped>
 .admin-tabs { margin-bottom: 20px; }
 .admin-tabs button {
-  padding: 8px 20px; margin-right: 8px; border: 1px solid #ddd; border-radius: 6px;
-  background: #fff; cursor: pointer;
+  padding: 8px 20px; margin-right: 8px; border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--card-bg); cursor: pointer; color: var(--fg);
 }
-.admin-tabs button.active { background: #e74c3c; color: #fff; border-color: #e74c3c; }
-.btn-add { padding: 8px 16px; background: #2c3e50; color: #fff; border: none; border-radius: 6px; cursor: pointer; margin-bottom: 14px; }
-.admin-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
-.admin-table th, .admin-table td { padding: 10px 14px; border-bottom: 1px solid #eee; text-align: left; }
-.admin-table th { background: #f8f9fa; font-size: 14px; }
-.btn-sm { padding: 4px 12px; margin-right: 6px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; }
-.btn-sm.primary { background: #2c3e50; color: #fff; border-color: #2c3e50; }
-.btn-sm.danger { color: #e74c3c; border-color: #e74c3c; }
-.modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { width: 520px; max-width: 90vw; background: #fff; border-radius: 10px; padding: 24px; }
+.admin-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-add { padding: 8px 16px; background: var(--heading); color: #fff; border: none; border-radius: 6px; cursor: pointer; margin-bottom: 14px; }
+.admin-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; }
+.admin-table th, .admin-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); text-align: left; }
+.admin-table th { background: var(--thead-bg); font-size: 14px; }
+.btn-sm { padding: 4px 12px; margin-right: 6px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--card-bg); cursor: pointer; color: var(--fg); }
+.btn-sm.primary { background: var(--heading); color: #fff; border-color: var(--heading); }
+.btn-sm.danger { color: var(--accent); border-color: var(--accent); }
+.modal-mask { position: fixed; inset: 0; background: var(--mask); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { width: 520px; max-width: 90vw; background: var(--card-bg); border-radius: 10px; padding: 24px; color: var(--fg); }
 .modal h3 { margin-bottom: 16px; }
 .modal textarea { resize: vertical; }
 .modal-actions { margin-top: 16px; text-align: right; }

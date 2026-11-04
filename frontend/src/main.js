@@ -3,11 +3,19 @@ import { createPinia } from 'pinia'
 import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals'
 import App from './App.vue'
 import router from './router'
+import i18n, { currentLocale } from './i18n'
+import { initTheme } from './utils/theme'
 import { recordVitals } from './utils/vitals'
+
+// #59：暗色模式初始化（首屏前应用，避免闪白）——localStorage 优先，其次跟随系统
+initTheme()
+// 语言初始化同步 <html lang>
+document.documentElement.lang = currentLocale()
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
+app.use(i18n)
 app.mount('#app')
 
 // Web Vitals 采集上报：CLS / FCP / INP / LCP / TTFB

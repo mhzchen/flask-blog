@@ -1,5 +1,5 @@
 <template>
-  <div v-if="loadingPost" class="detail-skeleton">
+  <div v-if="loadingPost" class="detail-skeleton" aria-hidden="true">
     <div class="skeleton-line" style="width:60%;height:28px;"></div>
     <div class="skeleton-line" style="width:35%;height:14px;margin-top:14px;"></div>
     <div class="skeleton-line" style="width:100%;height:16px;margin-top:28px;"></div>
@@ -7,37 +7,41 @@
     <div class="skeleton-line" style="width:90%;height:16px;"></div>
     <div class="skeleton-line" style="width:70%;height:16px;"></div>
   </div>
-  <div v-else-if="post">
+  <article v-else-if="post">
     <h1 class="detail-title">{{ post.title }}</h1>
     <div class="detail-meta">
       <span>{{ post.category }}</span>
-      <span> | {{ post.created_at }}</span> <span>| {{ post.views }} 阅读</span>
+      <span> | {{ post.created_at }}</span> <span>| {{ t('post.views', { n: post.views }) }}</span>
     </div>
     <div class="detail-content" v-html="safeContent"></div>
-    <div v-if="post.tags && post.tags.length" class="detail-tags">       <span v-for="t in post.tags" :key="t" class="detail-tag">{{ t }}</span>     </div>
+    <div v-if="post.tags && post.tags.length" class="detail-tags">
+      <span v-for="t in post.tags" :key="t" class="detail-tag">{{ t }}</span>
+    </div>
 
     <template v-if="auth.isAuthenticated">
-      <button class="like-btn" :class="{ active: liked }" :disabled="likeLoading" @click="toggleLike">
-        {{ liked ? '已赞 ♥' : '点赞 ♡' }} {{ post.like_count ?? 0 }}
+      <button class="like-btn" :class="{ active: liked }" :disabled="likeLoading"
+              :aria-pressed="liked" @click="toggleLike">
+        {{ liked ? t('post.liked') : t('post.like') }} {{ post.like_count ?? 0 }}
       </button>
-      <button class="fav-btn" :class="{ active: favorited }" :disabled="favLoading" @click="toggleFavorite">
-        {{ favorited ? '已收藏 ♥' : '收藏 ♡' }}
+      <button class="fav-btn" :class="{ active: favorited }" :disabled="favLoading"
+              :aria-pressed="favorited" @click="toggleFavorite">
+        {{ favorited ? t('post.favorited') : t('post.favorite') }}
       </button>
     </template>
     <p v-else class="empty-tip">
-      登录后即可收藏文章。
+      {{ t('post.loginToFav') }}
     </p>
 
     <!-- 评论区 -->
-    <section class="comments">
-      <h3>评论 ({{ total || comments.length }})</h3>
+    <section class="comments" aria-label="Comments">
+      <h3>{{ t('post.comments', { n: total || comments.length }) }}</h3>
       <ul v-if="comments.length" class="comment-list">
         <li v-for="c in comments" :key="c.id" class="comment-item">
           <div class="comment-head">
             <strong>{{ c.username }}</strong>
             <span>{{ c.created_at }}</span>
-            <button v-if="auth.isAuthenticated" class="reply-btn" @click="startReply(c)">回复</button>
-            <button v-if="canDelete(c)" class="del-btn" @click="removeComment(c.id)">删除</button>
+            <button v-if="auth.isAuthenticated" class="reply-btn" @click="startReply(c)">{{ t('post.reply') }}</button>
+            <button v-if="canDelete(c)" class="del-btn" @click="removeComment(c.id)">{{ t('post.delete') }}</button>
           </div>
           <p class="comment-content">{{ c.content }}</p>
           <ul v-if="c.replies && c.replies.length" class="reply-list">
@@ -45,37 +49,40 @@
               <div class="comment-head">
                 <strong>{{ r.username }}</strong>
                 <span>{{ r.created_at }}</span>
-                <button v-if="canDelete(r)" class="del-btn" @click="removeComment(r.id)">删除</button>
+                <button v-if="canDelete(r)" class="del-btn" @click="removeComment(r.id)">{{ t('post.delete') }}</button>
               </div>
               <p class="comment-content">{{ r.content }}</p>
             </li>
           </ul>
         </li>
       </ul>
-      <p v-else class="empty-tip">还没有评论，来抢沙发~</p>
+      <p v-else class="empty-tip">{{ t('post.noComments') }}</p>
 
       <div v-if="auth.isAuthenticated" class="comment-form">
         <div v-if="replyTo" class="reply-to">
-          回复 <strong>{{ replyTo.username }}</strong>
-          <button class="reply-cancel" @click="replyTo = null">取消</button>
+          {{ t('post.replyToUser', { name: replyTo.username }) }}
+          <button class="reply-cancel" @click="replyTo = null">{{ t('post.cancel') }}</button>
         </div>
-        <textarea v-model="commentText" placeholder="写下你的评论..." rows="3"></textarea>
-        <button :disabled="!commentText.trim() || submitting" @click="submitComment">发表评论</button>
+        <label for="comment-text" class="visually-hidden">{{ t('post.commentPh') }}</label>
+        <textarea id="comment-text" v-model="commentText" :placeholder="t('post.commentPh')" rows="3"></textarea>
+        <button :disabled="!commentText.trim() || submitting" @click="submitComment">{{ t('post.submit') }}</button>
       </div>
-      <button v-if="auth.isAuthenticated && hasMore" class="load-more" @click="loadMore">加载更多评论</button>
-      <p v-else class="empty-tip">登录后即可发表评论。</p>
+      <button v-if="auth.isAuthenticated && hasMore" class="load-more" @click="loadMore">{{ t('post.loadMore') }}</button>
+      <p v-else class="empty-tip">{{ t('post.loginToComment') }}</p>
     </section>
-  </div>
-  <p v-else class="empty-tip">文章不存在或加载失败。</p>
+  </article>
+  <p v-else class="empty-tip">{{ t('post.notFound') }}</p>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import api from '../api'
 import { useAuthStore } from '../stores/auth'
 import { sanitizeHtml } from '../utils/sanitize'
 
+const { t } = useI18n()
 const route = useRoute()
 const auth = useAuthStore()
 
@@ -101,6 +108,15 @@ async function fetchPost() {
     const { data } = await api.get(`/posts/${route.params.id}`)
     post.value = data.post
     liked.value = !!data.post.liked
+    // SEO：文章详情动态覆盖 <title> 与 meta description（含 i18n 站点名）
+    if (data.post.title) document.title = `${data.post.title} · RUNOOB 博客`
+    if (data.post.summary) {
+      let el = document.querySelector('meta[name="description"]')
+      if (!el) {
+        el = document.createElement('meta'); el.setAttribute('name', 'description'); document.head.appendChild(el)
+      }
+      el.setAttribute('content', data.post.summary)
+    }
     if (auth.isAuthenticated) {
       try {
         const { data: fav } = await api.get(`/favorites/check/${route.params.id}`)
@@ -184,7 +200,7 @@ async function submitComment() {
     commentText.value = ''
     replyTo.value = null
   } catch (e) {
-    alert('评论失败：' + (e.response?.data?.error || '请重试'))
+    alert(t('post.commentFail') + (e.response?.data?.error || ''))
   } finally {
     submitting.value = false
   }
@@ -210,21 +226,22 @@ onMounted(() => {
   50% { opacity: .35; }
 }
 .detail-skeleton .skeleton-line {
-  background: #e5e6eb;
+  background: var(--skeleton);
   border-radius: 4px;
   margin: 12px 0;
   animation: skeleton-pulse 1.2s ease-in-out infinite;
 }
-.like-btn { margin-right: 8px; background: #fff; border: 1px solid #f0c; color: #e74c3c; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+.like-btn { margin-right: 8px; background: var(--card-bg); border: 1px solid var(--accent); color: var(--accent); padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+.like-btn.active { background: var(--accent); color: #fff; }
 .detail-tags { margin: 12px 0; }
 .detail-tag {
-  display: inline-block; background: #eef3ff; color: #3a6ea5;
+  display: inline-block; background: var(--tag-bg); color: var(--tag-fg);
   font-size: 13px; padding: 3px 10px; border-radius: 12px; margin-right: 8px;
 }
 
 .comments {
   margin-top: 32px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   padding-top: 16px;
 }
 .comment-list {
@@ -233,29 +250,29 @@ onMounted(() => {
 }
 .comment-item {
   padding: 10px 0;
-  border-bottom: 1px dashed #f0f0f0;
+  border-bottom: 1px dashed var(--dash);
 }
 .comment-head {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #888;
+  color: var(--muted);
 }
 .comment-head strong {
-  color: #333;
+  color: var(--fg);
 }
 .del-btn {
   margin-left: auto;
   background: none;
   border: none;
-  color: #e74c3c;
+  color: var(--accent);
   cursor: pointer;
   font-size: 13px;
 }
 .comment-content {
   margin: 6px 0 0;
-  color: #444;
+  color: var(--muted-strong);
   line-height: 1.6;
 }
 .comment-form {
@@ -264,15 +281,17 @@ onMounted(() => {
 .comment-form textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 10px;
   font-size: 14px;
   resize: vertical;
+  background: var(--input-bg);
+  color: var(--fg);
 }
 .comment-form button {
   margin-top: 8px;
-  background: #409eff;
+  background: var(--primary);
   color: #fff;
   border: none;
   padding: 8px 20px;
@@ -280,13 +299,17 @@ onMounted(() => {
   cursor: pointer;
 }
 .comment-form button:disabled {
-  background: #c0c4cc;
+  background: var(--disabled);
   cursor: not-allowed;
 }
 .reply-list { list-style: none; margin: 8px 0 0 24px; padding: 0; }
-.reply-item { padding: 8px 0; border-left: 2px solid #eef; padding-left: 12px; }
-.reply-btn { background: none; border: none; color: #409eff; cursor: pointer; font-size: 13px; margin-left: 8px; }
-.reply-to { margin-bottom: 8px; font-size: 13px; color: #666; }
-.reply-cancel { background: none; border: none; color: #999; cursor: pointer; margin-left: 8px; }
-.load-more { margin-top: 12px; background: #fff; border: 1px solid #ddd; padding: 6px 16px; border-radius: 6px; cursor: pointer; color: #409eff; }
+.reply-item { padding: 8px 0; border-left: 2px solid var(--border); padding-left: 12px; }
+.reply-btn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; margin-left: 8px; }
+.reply-to { margin-bottom: 8px; font-size: 13px; color: var(--muted-strong); }
+.reply-cancel { background: none; border: none; color: var(--muted); cursor: pointer; margin-left: 8px; }
+.load-more { margin-top: 12px; background: var(--card-bg); border: 1px solid var(--border-strong); padding: 6px 16px; border-radius: 6px; cursor: pointer; color: var(--primary); }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 </style>
