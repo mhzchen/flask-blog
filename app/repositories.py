@@ -144,7 +144,10 @@ class PostRepository:
         return (joinedload(Post.category), selectinload(Post.tags))
 
     def get(self, post_id: int) -> Optional[Post]:
-        return db.session.get(Post, post_id)
+        # eager load category/tags，避免详情 to_dict 触发 N+1（懒加载 category + likes.count + tags）
+        return (db.session.query(Post)
+                .options(*self._list_load())
+                .filter(Post.id == post_id).first())
 
     def get_by_id_or_404(self, post_id: int) -> Post:
         """文章不存在时返回 404（等价原路由里的 db.get_or_404）。"""

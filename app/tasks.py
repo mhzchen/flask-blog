@@ -13,8 +13,17 @@ from app.celery_app import celery
 from app.degradation import degrade
 
 
+_broker_ok_cache = {"ts": 0.0, "ok": True}
+
+
 def _broker_reachable(timeout=1.0):
-    """快速探测 broker（Redis）是否可达。不可达返回 False，避免 task.delay 阻塞重试。"""
+    """快速探测 broker（Redis）是否可达。不可达返回 False，避免 task.delay 阻塞重试。
+
+    短缓存 2s：broker 状态短时间稳定，热点路径（详情页每次请求都调）不重复 TCP connect。
+    """
+    now = time.time()
+    if now - _broker_ok_cache["ts"] < 2.0:
+        return _broker_ok_cache["ok"]
     try:
         from urllib.parse import urlparse
         url = celery.conf.get('broker_url', 'redis://localhost:6379/1')
@@ -22,21 +31,35 @@ def _broker_reachable(timeout=1.0):
         host = parts.hostname or 'localhost'
         port = parts.port or 6379
         with socket.create_connection((host, port), timeout=timeout):
-            return True
+            ok = True
     except Exception:
-        return False
+        ok = False
+    _broker_ok_cache["ts"] = now
+    _broker_ok_cache["ok"] = ok
+    return ok
+
+
+_local_view_dedup = {}
 
 
 def _view_dedup(app, post_id):
     """record_post_view 投递去重：同一 post 短窗口只投递一次（防前端重试/网络重发重复计数）。
 
-    用 Redis SETNX 原子占位，TTL 窗口内重复投递直接跳过；Redis 不可用降级为照常投递（不丢）。
+    先用进程内 120s 快缓存命中（热点详情页每次请求都调，零 Redis 往返）；
+    miss 再走 Redis SETNX 原子占位兜底多 worker 去重；Redis 不可用降级为照常投递（不丢）。
     """
+    now = time.time()
+    ts = _local_view_dedup.get(post_id)
+    if ts is not None and now - ts < 120:
+        return True
     client = cache._client(app)
     if client is None:
         return False
     try:
-        return not client.set(f'view_dedup:{post_id}', '1', nx=True, ex=120)
+        dup = not client.set(f'view_dedup:{post_id}', '1', nx=True, ex=120)
+        if not dup:
+            _local_view_dedup[post_id] = now
+        return dup
     except Exception:
         return False
 

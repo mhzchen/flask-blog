@@ -22,7 +22,7 @@ jobs:
       - name: Ruff 代码规范检查
         run: ruff check app tests scripts wsgi.py config.py seed.py celery_worker.py
       - name: mypy 类型检查（核心纯逻辑模块）
-        run: mypy app/sanitize.py app/services.py
+        run: mypy app
       - name: 安全扫描（bandit 代码安全 + pip-audit 依赖漏洞）
         run: |
           bandit -r app -c .bandit
@@ -45,7 +45,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Run tests with coverage gate
-        run: pytest
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=90
 
   migration:
     name: DB Migration (MySQL)

@@ -323,3 +323,26 @@ flask --app wsgi db upgrade
   - `frontend/playwright.config.js` 设 `workers: 1`（串行）：2 workers 并发登录同一账号时后端登录请求变慢（dur 2-4s、slow_request）且前端偶发把慢响应判为「登录失败，请重试」导致 login helper 停在 /login；串行后稳定。
   - `frontend/e2e/workflow.spec.js` 评论用例 selector 由 `textarea[placeholder="写下你的评论..."]`（英文点）改为 `#comment-text`：#59 i18n 后 placeholder 是中文省略号「写下你的评论…」（U+2026），旧 selector 永不匹配导致 45s timeout；实际 textarea 一直在 DOM 中（提交按钮因空内容 disabled，fill 后自动启用）。
 - **#63 E2E 真验**：本地 msedge 通道跑全量 6 条（首页/搜索/登录详情/登录回首页/发帖/评论）**6 passed**；backend/frontend 新镜像（`docker compose build` + `up --no-deps -d --wait`）下闭环通过。
+
+## 本轮：#64 CI 质量门补全 / #65 详情页性能再优化
+
+- **#64 CI 质量门补全**：
+  - `test` job 的 pytest 纳入硬 coverage 门禁：`pytest --cov=app --cov-report=term-missing --cov-fail-under=90`（3.11/3.12/3.13 全矩阵，覆盖率 <90% 直接拦截发布）。
+  - `lint-typecheck` job 的 mypy 由 2 文件（sanitize.py / services.py）扩为全量 `mypy app`（29 个源文件）。
+  - ruff（全量）/ bandit / pip-audit / npm audit 已在此前落地，本轮补齐 coverage 与类型检查全量，共同构成发布硬门禁。
+  - 本地验证：`mypy app` → Success(no issues found in 29 source files)；pytest 223 passed / coverage 90.29%（≥90 门禁通过）。
+- **#65 详情页性能再优化**：
+  - 根因：详情命中路径每次请求 3 次 Redis/网络往返（缓存 get + 视图去重 SETNX + broker 探活 TCP connect）；miss 路径 `db.session.get(Post)` 无 eager load，`to_dict(include_content=True)` 触发 category/likes/tags 的 N+1。
+  - 改动：
+    - `app/tasks.py`：`_broker_reachable` 加 2s 进程内短缓存（热点不再重复 TCP connect）；`_view_dedup` 加 120s 本地快缓存（命中零 Redis 往返，miss 仍走 Redis SETNX 兜底多 worker 去重）。
+    - `app/repositories.py`：`PostRepository.get` 改带 `_list_load()` eager load 的 query，消除 miss 路径 N+1。
+  - 真验（venv 8007 无限流实例，与 #62 同参：并发 20 / 总量 500 / warmup 20，同一 MySQL 3307）：
+    | 指标 | #62 基线 | #65 优化后 |
+    |------|----------|-----------|
+    | 详情 QPS | 37 | 46 |
+    | avg 延迟 | 522.4ms | 428.9ms |
+    | p50 | 444.2ms | 378.2ms |
+    | p95 | 986.7ms | 999.8ms |
+    | p99 | 1295.7ms | 1179.4ms |
+    | 错误率 | 0% | 0% |
+  - 结论：详情 QPS **+24%（37→46）**、avg 延迟 **-18%**；生产 gunicorn 多 worker 下 Redis 往返由 3 降为 1 的收益更显著。
