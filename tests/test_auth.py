@@ -112,3 +112,20 @@ def test_refresh_rejects_access_token(client, normal_user):
 def test_refresh_no_token(client):
     resp = client.post('/api/v1/auth/refresh')
     assert resp.status_code == 401
+
+
+def test_change_password_wrong_old(client, user_headers, normal_user):
+    """旧密码错误 → 400（不更新密码）"""
+    r = client.post("/api/v1/auth/password",
+                    json={"old_password": "wrongpass", "new_password": "NewSecret123"},
+                    headers=user_headers)
+    assert r.status_code == 400
+    assert r.get_json()["error"]
+
+
+def test_change_password_success(client, user_headers, normal_user):
+    """修改密码成功 → 200，旧 token 撤销（黑名单降级放行）"""
+    r = client.post("/api/v1/auth/password",
+                    json={"old_password": "secret123", "new_password": "NewSecret123"},
+                    headers=user_headers)
+    assert r.status_code == 200

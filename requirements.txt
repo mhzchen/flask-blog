@@ -16,6 +16,7 @@ pydantic>=2.7
 email-validator>=2.0
 flask-limiter>=3.0
 bleach>=6.0
+requests>=2.31   # GitHub OAuth 登录（#60）
 # OpenTelemetry 全链路追踪（HTTP->DB->Redis->Celery 一条 trace）
 opentelemetry-sdk>=1.24
 opentelemetry-instrumentation-flask>=0.47

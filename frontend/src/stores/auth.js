@@ -27,6 +27,24 @@ export const useAuthStore = defineStore('auth', {
       if (refreshToken) localStorage.setItem('refresh_token', refreshToken)
       localStorage.setItem('user', JSON.stringify(user))
     },
+    // GitHub OAuth 回调处理：从 URL query 取 token，拉取用户信息后落地登录态
+    async completeOAuth() {
+      const qp = new URLSearchParams(window.location.search)
+      if (qp.get('oauth') !== 'github' || !qp.get('access_token')) return null
+      const token = qp.get('access_token')
+      const refresh = qp.get('refresh_token') || ''
+      this.token = token
+      this.user = null
+      localStorage.setItem('access_token', token)
+      if (refresh) localStorage.setItem('refresh_token', refresh)
+      try {
+        const { data } = await api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+        this.user = data.user
+        localStorage.setItem('user', JSON.stringify(data.user))
+      } catch (e) { /* 用户信息未取到则仅保留 token，下次进入再补 */ }
+      history.replaceState({}, '', window.location.pathname)
+      return this.user
+    },
     async refreshToken() {
       const refresh = localStorage.getItem('refresh_token')
       if (!refresh) throw new Error('no refresh token')

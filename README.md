@@ -291,3 +291,12 @@ flask --app wsgi db upgrade
 - **#59 a11y**：`App.vue` 全局 `:focus-visible` 键盘焦点样式 + skip-link（跳转主内容）+ `main` 语义；主导航 `aria-label`、图标按钮 `aria-label`/`title`；登录/注册/后台表单 `label for/id` 关联 + 错误 `role=alert`/`aria-live`；点赞/收藏 `aria-pressed`、分页 `aria-current`、评论区语义化 `section/aria-label`；卡片链接 `aria-label`、SVG 图表 `role=img`。暗色色板经过对比度选色（正文/弱化文本/强调色均满足 WCAG AA 级别于两种主题）。
 - **#59 真验（真实浏览器 + Edge）**：Playwright 启动 preview 实测——SEO 首页 title/meta description/OG 存在；路由切换 title 变「登录 · RUNOOB 博客」；点击主题按钮 `<html data-theme=dark>` 生效且 localStorage 持久化、刷新保持；点击语言按钮文案变 Home、`locale=en` 与 `<html lang=en>` 生效、刷新保持、切回中文恢复；skip-link/主导航 aria-label/focus-visible 规则均在构建产物确认。**16 项浏览器断言通过 + 构建产物 CSS 核验（focus-visible/skip-link）**。
 - **#59 质量门**：`vite build` 通过（147 modules，vue-i18n 并入 vendor）；新增 `tests/theme.test.js`（5 项：系统偏好/优先级/toggle 持久化/init/apply）与 `tests/i18n.test.js`（4 项：zh/en 文案/currentLocale/插值）→ 全量 vitest **17 passed**（含既有 sanitize/PostCard 8 项未回归）。
+
+
+## 本轮：#60 安全纵深——GitHub OAuth 登录 + IDOR 越权测试
+
+- **#60 GitHub OAuth 登录**：requirements 加 `requests`；config 新增 `GITHUB_CLIENT_ID/SECRET/REDIRECT_URI/AUTHORIZE_URL/TOKEN_URL/USER_URL`（未配置时 OAuth 端点 503 降级，不影响密码登录）；`User` 新增 `github_id`（唯一可空）/`github_username` 字段 + Alembic 迁移 `0009_add_github_oauth`；`auth_service.github_login_or_register`（按 github_id 找/建用户，username 冲突自动加后缀、email 缺省用 noreply 兜底、GitHub 用户随机不可登录密码）；`auth.py` 新增 `GET /github/login`（随机 state 防 CSRF + 302 到 GitHub 授权页）与 `GET /github/callback`（校验 state → 换 access_token → 拉 user → 登录/注册 → 发 JWT → 跳前端）。前端 `LoginView` 新增 GitHub 登录按钮，`auth store.completeOAuth` 解析 `?oauth=github&access_token=..` 落地登录态；docker-compose backend 注入 `GITHUB_CLIENT_ID/SECRET` 环境变量。
+- **#60 IDOR 越权防护**：全资源复核——评论删除 `comment_service.delete(comment_id, current_user)` 强校验作者/管理员（他人 403）；收藏/点赞/`/auth/me` 一律从 `get_jwt_identity()` 取当前用户，无跨用户 id 注入面；管理端 `admin_required`（require_admin）；JWT 签名保证伪造他人 sub 无效。
+- **#60 测试**：新增 `tests/test_oauth.py`（12 项：未配置 503 / 302 带 state / state 校验失败 400 / 建用户+发 JWT / 复用 / username 冲突后缀 / gh_兜底 / no-email noreply / 网络错误 502 / 无 access_token 502 / 无用户 id 502）；新增 `tests/test_idor.py`（8 项：他人删评论 403 / 本人 200 / 管理员 200 / 收藏跨用户隔离 / 无 user_id 注入面 / 越权访问 admin 403 / me 作用域 / 伪造 sub 隔离）。
+- **#60 真验（真实 HTTP 实例 PORT=8003）**：OAuth login 302 → GitHub 授权页（含 state）；IDOR 全流程 runoob(admin) 发评论 → bob 删除 **403**、admin 删除 200、bob 收藏列表隔离为空、me 仅返回当前用户、bob 访问 admin **403**。**8 项真实请求断言全过**。
+- **#60 质量门**：全量 pytest 通过（221 项新增至 test_oauth 12 + test_idor 8）、coverage ≥90%、ruff 全过、mypy Success(30 source files)；前端 `vite build` 通过、vitest 17 passed（既有 17 未回归，i18n 新增 githubLogin 文案）。

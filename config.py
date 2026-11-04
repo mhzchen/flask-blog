@@ -126,6 +126,16 @@ class Config:
     LOG_DIR = os.environ.get('LOG_DIR', 'logs')
     LOG_FILE_BACKUP_DAYS = int(os.environ.get('LOG_FILE_BACKUP_DAYS', '14'))
 
+    # ---------- GitHub OAuth 登录（#60） ----------
+    # 未配置 CLIENT_ID 时 OAuth 端点返回 503（功能降级，不影响密码登录）
+    GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID', '')
+    GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET', '')
+    GITHUB_REDIRECT_URI = os.environ.get('GITHUB_REDIRECT_URI',
+                                         'http://localhost:5000/api/v1/auth/github/callback')
+    GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
+    GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
+    GITHUB_USER_URL = 'https://api.github.com/user'
+
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
     # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流

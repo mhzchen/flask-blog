@@ -14,7 +14,7 @@ export default {
     noAccount: '还没有账号？', registerNow: '立即注册', loginFailed: '登录失败，请重试',
     register: '注册', email: '邮箱', confirm: '确认密码', registering: '注册中…',
     haveAccount: '已有账号？', loginNow: '立即登录', mismatch: '两次输入的密码不一致',
-    registerFailed: '注册失败，请重试' },
+    registerFailed: '注册失败，请重试', githubLogin: '使用 GitHub 登录', githubNote: '或' },
   fav: { title: '我的收藏', none: '你还没有收藏任何文章。' },
   admin: { title: '后台管理', posts: '文章管理', cats: '分类管理', newPost: '＋ 新建文章',
     editPost: '编辑文章', newArticle: '新建文章', title: '标题', category: '分类',

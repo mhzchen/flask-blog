@@ -57,6 +57,10 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       FLASK_ENV: production
+      # GitHub OAuth 登录（#60）：未配置时 OAuth 端点 503 降级，不影响密码登录
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: http://localhost:5000/api/v1/auth/github/callback
       CORS_ORIGINS: http://localhost:8080
       CACHE_ENABLED: "true"
       CACHE_REDIS_URL: redis://redis:6379/0

@@ -89,6 +89,23 @@ class AuthService:
         db_commit()
         return user
 
+    def github_login_or_register(self, gh: dict) -> User:
+        """GitHub OAuth：按 github_id 找用户；无则创建（username 冲突自动加后缀）。
+
+        GitHub 用户无本地密码，密码为随机不可登录值；email 缺省用 noreply 兜底。
+        """
+        github_id = str(gh.get('id'))
+        user = user_repo.get_by_github_id(github_id)
+        if user:
+            return user
+        username = (gh.get('login') or '').strip() or f'gh_{github_id}'
+        base, n = username, 1
+        while user_repo.get_by_username(base):
+            base = f'{username}_{n}'
+            n += 1
+        email = gh.get('email') or f'{base}@users.noreply.github.com'
+        return user_repo.create_github_user(base, email, github_id, gh.get('name'))
+
     current_user = get_or_404
 
 

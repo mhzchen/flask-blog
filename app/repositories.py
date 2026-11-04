@@ -48,6 +48,20 @@ class UserRepository:
         db.session.commit()
         return user
 
+    def get_by_github_id(self, github_id: str) -> Optional[User]:
+        return User.query.filter_by(github_id=github_id).first()
+
+    def create_github_user(self, username: str, email: str, github_id: str,
+                           github_username: Optional[str] = None) -> User:
+        """创建 GitHub OAuth 用户：随机不可登录密码，仅用于绑定 github_id。"""
+        import secrets
+        user = User(username=username, email=email,
+                    github_id=github_id, github_username=github_username)
+        user.set_password(secrets.token_urlsafe(32))
+        db.session.add(user)
+        db.session.commit()
+        return user
+
 
 class CategoryRepository:
     """分类数据访问。"""

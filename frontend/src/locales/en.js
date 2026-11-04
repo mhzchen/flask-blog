@@ -14,7 +14,7 @@ export default {
     noAccount: 'No account yet?', registerNow: 'Register now', loginFailed: 'Login failed, try again.',
     register: 'Register', email: 'Email', confirm: 'Confirm password', registering: 'Signing up…',
     haveAccount: 'Have an account?', loginNow: 'Login now', mismatch: 'Passwords do not match.',
-    registerFailed: 'Registration failed, try again.' },
+    registerFailed: 'Registration failed, try again.', githubLogin: 'Sign in with GitHub', githubNote: 'or' },
   fav: { title: 'My Favorites', none: 'You have not favorited any posts yet.' },
   admin: { title: 'Admin', posts: 'Posts', cats: 'Categories', newPost: '＋ New Post',
     editPost: 'Edit post', newArticle: 'New post', title: 'Title', category: 'Category',

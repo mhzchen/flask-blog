@@ -1,6 +1,9 @@
+import secrets
 import time
+from urllib.parse import urlencode
 
-from flask import Blueprint, current_app, g, jsonify
+import requests
+from flask import Blueprint, current_app, g, jsonify, redirect, request, session
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -106,6 +109,64 @@ def logout():
     ttl = max(int(payload.get('exp', time.time())) - int(time.time()), 1)
     ok = revoke_token(current_app._get_current_object(), payload.get('jti'), ttl)
     return jsonify({"message": "已注销。" if ok else "已注销（黑名单暂不可用，token 到期前仍有效）。"})
+
+
+@auth_bp.get("/github/login")
+def github_login():
+    """GitHub OAuth 发起：生成随机 state（防 CSRF）后 302 到 GitHub 授权页。
+
+    未配置 GITHUB_CLIENT_ID 时返回 503（降级，不影响密码登录）。
+    """
+    client_id = current_app.config.get('GITHUB_CLIENT_ID')
+    if not client_id:
+        return jsonify({'error': 'GitHub OAuth 未配置。'}), 503
+    state = secrets.token_urlsafe(16)
+    session['oauth_state'] = state
+    params = {
+        'client_id': client_id,
+        'redirect_uri': current_app.config['GITHUB_REDIRECT_URI'],
+        'scope': 'read:user user:email',
+        'state': state,
+    }
+    url = current_app.config['GITHUB_AUTHORIZE_URL'] + '?' + urlencode(params)
+    return redirect(url)
+
+
+@auth_bp.get("/github/callback")
+def github_callback():
+    """GitHub OAuth 回调：校验 state（防 CSRF）→ 换 access_token → 拉用户信息 → 登录/注册 → 发 JWT → 跳前端。"""
+    code = request.args.get('code')
+    state = request.args.get('state')
+    if not code or not state or state != session.pop('oauth_state', None):
+        return jsonify({'error': '无效的 OAuth 回调（state 校验失败）。'}), 400
+    try:
+        token = requests.post(
+            current_app.config['GITHUB_TOKEN_URL'],
+            json={
+                'client_id': current_app.config['GITHUB_CLIENT_ID'],
+                'client_secret': current_app.config['GITHUB_CLIENT_SECRET'],
+                'code': code,
+                'redirect_uri': current_app.config['GITHUB_REDIRECT_URI'],
+            },
+            headers={'Accept': 'application/json'}, timeout=10,
+        ).json()
+        access = token.get('access_token')
+        if not access:
+            return jsonify({'error': '获取 GitHub access token 失败。'}), 502
+        gh = requests.get(
+            current_app.config['GITHUB_USER_URL'],
+            headers={'Authorization': f'Bearer {access}'}, timeout=10,
+        ).json()
+        if not gh.get('id'):
+            return jsonify({'error': '获取 GitHub 用户信息失败。'}), 502
+        user = auth_service.github_login_or_register(gh)
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
+        front = (current_app.config.get('CORS_ORIGINS') or 'http://localhost:5173').split(',')[0].rstrip('/')
+        url = f"{front}/?oauth=github&access_token={access_token}&refresh_token={refresh_token}"
+        return redirect(url)
+    except requests.RequestException:
+        return jsonify({'error': '连接 GitHub 失败，请稍后重试。'}), 502
 
 
 @auth_bp.post("/password")

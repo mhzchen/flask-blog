@@ -76,6 +76,9 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    # GitHub OAuth 登录（#60）：github_id 唯一（可空），用于第三方登录绑定
+    github_id = db.Column(db.String(64), unique=True, nullable=True)
+    github_username = db.Column(db.String(100), nullable=True)
 
     def set_password(self, password):
         """对密码进行哈希加密（永远不存明文密码）"""
@@ -86,7 +89,10 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        return {'id': self.id, 'username': self.username, 'email': self.email, 'is_admin': self.is_admin}
+        data = {'id': self.id, 'username': self.username, 'email': self.email, 'is_admin': self.is_admin}
+        if self.github_id:
+            data['github_username'] = self.github_username
+        return data
 
     def __repr__(self):
         return f'<User {self.username}>'
