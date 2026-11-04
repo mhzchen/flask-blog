@@ -22,7 +22,7 @@ _logger = logging.getLogger('app.degradation')
 _lock = threading.Lock()
 
 SERVICES = (
-    'redis_cache', 'redis_login', 'redis_jwt', 'redis_idem',
+    'redis_cache', 'redis_login', 'redis_jwt', 'redis_idem', 'redis_ratelimit',
     'meilisearch', 'celery', 'otel', 'dbrouting',
 )
 

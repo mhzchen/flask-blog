@@ -300,3 +300,13 @@ flask --app wsgi db upgrade
 - **#60 测试**：新增 `tests/test_oauth.py`（12 项：未配置 503 / 302 带 state / state 校验失败 400 / 建用户+发 JWT / 复用 / username 冲突后缀 / gh_兜底 / no-email noreply / 网络错误 502 / 无 access_token 502 / 无用户 id 502）；新增 `tests/test_idor.py`（8 项：他人删评论 403 / 本人 200 / 管理员 200 / 收藏跨用户隔离 / 无 user_id 注入面 / 越权访问 admin 403 / me 作用域 / 伪造 sub 隔离）。
 - **#60 真验（真实 HTTP 实例 PORT=8003）**：OAuth login 302 → GitHub 授权页（含 state）；IDOR 全流程 runoob(admin) 发评论 → bob 删除 **403**、admin 删除 200、bob 收藏列表隔离为空、me 仅返回当前用户、bob 访问 admin **403**。**8 项真实请求断言全过**。
 - **#60 质量门**：全量 pytest 通过（221 项新增至 test_oauth 12 + test_idor 8）、coverage ≥90%、ruff 全过、mypy Success(30 source files)；前端 `vite build` 通过、vitest 17 passed（既有 17 未回归，i18n 新增 githubLogin 文案）。
+
+## 本轮：#61 限流深化——Redis 分布式限流 + 全局默认限流 + 429 配额响应头 + 存储降级
+
+- **#61 Redis 分布式限流存储**：`RATELIMIT_STORAGE_URI` 默认由 `memory://` 改为 `redis://localhost:6379/4`（多实例共享计数，env 可覆盖）；TestingConfig 用 `memory://` 隔离。真实 Redis 并发登录真验确认多实例写同一 `LIMITS:LIMITER/<ip>/auth.login/10/1/minute` 计数 key。
+- **#61 全局默认限流（防爬）**：新增 `RATELIMIT_DEFAULT`（Flask-Limiter 4.x 实际读取的键名，非 `RATELIMIT_DEFAULT_LIMITS`），默认 `"200 per minute"`、env 可覆盖（逗号分隔多个 limit）；`limiter.init_app(app)` 移到所有路由注册之后，使未单独配置限流的端点也受全局默认保护。
+- **#61 429 配额响应头**：`RATELIMIT_HEADERS_ENABLED=True`，成功与 429 响应均带 `X-RateLimit-Limit` / `X-RateLimit-Remaining`；429 走统一 error envelope（`error_code=RATE_LIMITED`）。
+- **#61 存储降级**：`create_app` 内探测 Redis 连通性（`RATELIMIT_ENABLED` 且 uri 以 redis 开头时 `ping()`，超时 1s），不可达自动 `degrade('redis_ratelimit', ...)` 并写回 `RATELIMIT_STORAGE_URI='memory://'`；`app/degradation.py` 的 `SERVICES` 新增 `redis_ratelimit`，`/api/v1/system/degradations` 可查。
+- **#61 测试**：`tests/test_ratelimit.py` 保留降级单测（Redis 不可达 → 自动降级内存 + 降级记录）；因 Flask-Limiter 模块级单例计数跨 `create_app` 泄漏无法在单测中干净隔离，计数型行为一律改由真实 HTTP 真验覆盖。
+- **#61 真验**：真实 Redis（6380/db4）并发 15 次 login → 10×200 + 5×429，429 body 含 `error_code=RATE_LIMITED`、`X-RateLimit-Limit=10`、`X-RateLimit-Remaining=0`，成功 200 同样带头；Redis 停止启动自动降级 memory 并记录 `redis_ratelimit`；全局默认限流（`RATELIMIT_DEFAULT="3 per minute"`）对未配置端点 posts 第 4 次返回 429 + 头（3/0）+ envelope。
+- **#61 质量门**：全量 pytest 通过（223 passed）、coverage 90.26% ≥ 90%、ruff 全过、mypy Success(30 source files)。

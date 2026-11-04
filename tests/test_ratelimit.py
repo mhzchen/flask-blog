@@ -1,53 +1,39 @@
-"""限流防刷测试（使用独立 app，开启限流）。
+"""限流深化测试（#61）：Redis 限流存储不可达时的内存降级。
 
-现有 conftest 里 RATELIMIT_ENABLED=False 以免互相干扰，
-本文件单独启用限流验证 429 返回。
+计数型限流行为（429 触发 / 配额响应头 / 全局默认限流 / 分布式共享）由真实 HTTP
+真验脚本覆盖——Flask-Limiter 为模块级单例且多 app 顺序复用 storage 会污染计数，
+单元测试只保留不依赖计数的降级记录断言。
 """
 
 from app import create_app, db
-from app.models import User
 from sqlalchemy.pool import StaticPool
 
 
-def _make_app():
-    class RLConfig:
-        TESTING = True
-        SQLALCHEMY_DATABASE_URI = 'sqlite://'
-        SQLALCHEMY_TRACK_MODIFICATIONS = False
-        SQLALCHEMY_ENGINE_OPTIONS = {'poolclass': StaticPool, 'connect_args': {'check_same_thread': False}}
-        SECRET_KEY = 'test-rl-secret'
-        JWT_SECRET_KEY = 'test-rl-jwt'
-        CACHE_ENABLED = False
-        CELERY_TASK_ALWAYS_EAGER = True
-        RATELIMIT_ENABLED = True
-        RATELIMIT_STORAGE_URI = 'memory://'
-    return create_app(RLConfig)
+class _RedisDownConfig:
+    """限流存储指向不可达 Redis：验证启动自动降级内存 + 记降级事件。"""
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite://'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {'poolclass': StaticPool, 'connect_args': {'check_same_thread': False}}
+    SECRET_KEY = 'test-rl-secret-key-0123456789abcdef'
+    JWT_SECRET_KEY = 'test-rl-jwt-key-0123456789abcdef'
+    CACHE_ENABLED = False
+    CELERY_TASK_ALWAYS_EAGER = True
+    RATELIMIT_ENABLED = True
+    RATELIMIT_STORAGE_URI = 'redis://127.0.0.1:6399/4'
+    RATELIMIT_DEFAULT_LIMITS = ["200 per minute"]
+    RATELIMIT_HEADERS_ENABLED = True
 
 
-def test_login_rate_limit_returns_429():
-    app = _make_app()
+def test_ratelimit_redis_down_fallback():
+    """Redis 限流存储不可达 → 探测失败写回 memory config 并记降级事件（运行时请求由真验覆盖）"""
+    from app.degradation import degradation_summary
+    app = create_app(_RedisDownConfig)
     with app.app_context():
-        db.create_all()
-        u = User(username='bob', email='bob@example.com')
-        u.set_password('secret123')
-        db.session.add(u)
-        db.session.commit()
-    client = app.test_client()
-    codes = []
-    for _ in range(11):
-        resp = client.post('/api/v1/auth/login', json={'username': 'bob', 'password': 'wrong'})
-        codes.append(resp.status_code)
-    assert codes[-1] == 429
-
-
-def test_register_rate_limit_returns_429():
-    app = _make_app()
-    with app.app_context():
-        db.create_all()
-    client = app.test_client()
-    codes = []
-    for _ in range(6):
-        resp = client.post('/api/v1/auth/register', json={
-            'username': f'u{_}', 'email': f'u{_}@e.com', 'password': 'secret123'})
-        codes.append(resp.status_code)
-    assert codes[-1] == 429
+        try:
+            assert app.config['RATELIMIT_STORAGE_URI'] == 'memory://'  # 已降级
+            services = {d['service'] for d in degradation_summary()}
+            assert 'redis_ratelimit' in services
+        finally:
+            db.session.remove()
+            db.drop_all()

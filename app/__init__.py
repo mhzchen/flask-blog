@@ -1,6 +1,6 @@
 import json
-import os
 import logging
+import os
 import random
 import time
 import uuid
@@ -38,6 +38,7 @@ def _check_token_blocklist(jwt_header, jwt_payload):
     Redis 不可用时 is_blocked 降级放行，保证认证不因黑名单服务故障而中断。
     """
     from flask import current_app
+
     from app.jwt_blacklist import is_blocked
     app = current_app._get_current_object()  # type: ignore[attr-defined]
     return is_blocked(app, jwt_payload.get('jti'), jwt_payload.get('sub'), jwt_payload.get('iat'))
@@ -63,7 +64,17 @@ def create_app(config_class=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    limiter.init_app(app)
+    # 限流：Redis 分布式存储 + 全局默认限流(防爬) + 429 配额响应头；存储不可达自动降级内存并记降级事件
+    # (Flask-Limiter 的 init_app 会自动读取 app.config 的 RATELIMIT_* 配置，故此处仅探测连通性)
+    _storage_uri = app.config.get('RATELIMIT_STORAGE_URI', 'memory://')
+    if app.config.get('RATELIMIT_ENABLED', True) and _storage_uri.startswith('redis'):
+        try:
+            from redis import Redis
+            Redis.from_url(_storage_uri, socket_connect_timeout=1).ping()
+        except Exception as e:
+            from app.degradation import degrade
+            degrade('redis_ratelimit', 'Redis 限流存储不可达，降级为内存限流: %s' % e, app)
+            app.config['RATELIMIT_STORAGE_URI'] = 'memory://'  # 写回 config，让 init_app 读取降级后的存储
     CORS(app, resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
 
     # 统一 JSON 错误处理（所有错误都返回结构化 JSON）
@@ -84,7 +95,8 @@ def create_app(config_class=None):
     # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
     init_celery(app)
 
-    # WebSocket 实时推送（Flask-SocketIO；/socket.io 由 WSGI server 提供，多 worker/多实例广播靠 SOCKETIO_MESSAGE_QUEUE redis 消息队列跨进程分发）
+    # WebSocket 实时推送（Flask-SocketIO；/socket.io 由 WSGI server 提供，
+    # 多 worker/多实例广播靠 SOCKETIO_MESSAGE_QUEUE redis 消息队列跨进程分发）
     socketio.init_app(
         app,
         cors_allowed_origins=app.config.get('CORS_ORIGINS', '*'),
@@ -116,6 +128,9 @@ def create_app(config_class=None):
 
     # 注册 Prometheus 指标端点 /metrics（可观测性）
     register_metrics(app)
+
+    # 限流初始化放到所有路由注册之后：让全局默认限流(RATELIMIT_DEFAULT_LIMITS)覆盖每个端点（防爬）
+    limiter.init_app(app)
 
     @app.post('/api/internal/alerts')
     def _internal_alerts():

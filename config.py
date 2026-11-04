@@ -138,8 +138,14 @@ class Config:
 
     # ---------- 限流防刷 ----------
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
-    # 限流存储默认用进程内内存（开发/单机安全）；生产多实例可覆盖为 redis:// 实现共享限流
-    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
+    # 限流存储默认 Redis(独立 db4)，多实例共享计数实现分布式限流；Redis 不可达时启动自动降级内存
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'redis://localhost:6379/4')
+    # 全局默认限流（每 IP），防爬虫/暴力刷；auth 等关键端点再用更严格的 per-endpoint 覆盖
+    # Flask-Limiter 4.x 读取 RATELIMIT_DEFAULT（非 RATELIMIT_DEFAULT_LIMITS），
+    # 值必须是字符串、逗号分隔多个 limit；支持 env 覆盖，默认 200 per minute
+    RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per minute')
+    # 429 响应附带配额响应头 X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset
+    RATELIMIT_HEADERS_ENABLED = True
 
 
 class DevelopmentConfig(Config):
@@ -165,6 +171,7 @@ class TestingConfig(Config):
     CELERY_BROKER_URL = 'memory://'
     CELERY_RESULT_BACKEND = 'cache+memory://'
     RATELIMIT_ENABLED = False
+    RATELIMIT_STORAGE_URI = 'memory://'  # 测试用进程内内存，不依赖 Redis
     SECURITY_HEADERS_ENABLED = False
     METRICS_ENABLED = False
     OTEL_ENABLED = False
