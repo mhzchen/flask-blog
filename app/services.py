@@ -14,7 +14,7 @@ import re
 import time
 from typing import Optional
 
-from app.cache import invalidate
+from app.cache import delete_exact, invalidate
 from app.models import Comment, Post, User
 from app.repositories import (
     categories as category_repo,
@@ -209,6 +209,10 @@ class PostService:
         """切换点赞，返回 (切换后是否已赞, 最新点赞数)。"""
         post = post_repo.get_by_id_or_404(post_id)
         liked = post_repo.toggle_like(user_id, post)
+        # 写路径一致性：详情缓存含 like_count，点赞后只精确失效该文章，
+        # 保证点赞数即时一致；用 delete_exact 而非 invalidate("post_detail")
+        # 全量前缀 scan，避免高频点赞的失效风暴。
+        delete_exact(f"post_detail:{post_id}")
         return liked, post.likes.count()
 
 

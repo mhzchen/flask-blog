@@ -50,6 +50,10 @@
       </template>
       <a href="#" @click.prevent="goPage(page + 1)" v-if="hasNext">{{ t('home.next') }}</a>
     </nav>
+
+    <button v-if="hasMore" class="load-more" @click="store.loadMore()" :disabled="loadingMore">
+      {{ loadingMore ? t('home.loadingMore') : t('home.loadMore') }}
+    </button>
   </div>
 </template>
 
@@ -68,7 +72,7 @@ const store = usePostsStore()
 // 视图层只声明 store 状态（Pinia 模块化），数据获取集中在 stores/posts.js
 const {
   items: posts, categories, tags, total, pages, hasPrev, hasNext,
-  page, loading, keyword, categorySlug, tagName,
+  page, loading, hasMore, loadingMore, keyword, categorySlug, tagName,
 } = storeToRefs(store)
 
 // 进入页面时用 URL query 初始化筛选条件（支持分享/刷新保持状态）
@@ -119,6 +123,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.load-more {
+  display: block; margin: 20px auto 0; padding: 8px 22px;
+  background: var(--card-bg); border: 1px solid var(--border-strong);
+  border-radius: 6px; color: var(--primary); cursor: pointer; font-size: 14px;
+}
+.load-more:disabled { opacity: .6; cursor: not-allowed; }
+
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: .35; }

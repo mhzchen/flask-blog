@@ -22,6 +22,7 @@ from app.errors import register_error_handlers
 from app.metrics import register_metrics
 from app.openapi import register_openapi_routes
 from app.security import register_security_headers
+from app.sentry import init_sentry
 from app.socketio import make_client_manager, register_socket_events, socketio
 from app.telemetry import _current_trace_id, init_telemetry
 
@@ -91,6 +92,9 @@ def create_app(config_class=None):
 
     # OpenTelemetry 全链路追踪：HTTP->DB->Redis->Celery 一条 trace（OTEL_ENABLED 开启）
     init_telemetry(app)
+
+    # Sentry 错误追踪（未配置 DSN 自动跳过；与 OTel 互补）
+    init_sentry(app)
 
     # 初始化 Celery 异步任务（把任务绑定到本应用的应用上下文）
     init_celery(app)

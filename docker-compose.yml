@@ -3,6 +3,11 @@ services:
     image: mysql:8.0
     container_name: flaskblog-db
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: flask_blog
@@ -24,6 +29,11 @@ services:
     image: redis:7-alpine
     container_name: flaskblog-redis
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -39,6 +49,11 @@ services:
     image: getmeili/meilisearch:v1.13.4
     container_name: flaskblog-meili
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-devMasterKey123}
       MEILI_ENV: production
@@ -52,6 +67,11 @@ services:
     build: .
     container_name: flaskblog-backend
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
       SECRET_KEY: ${SECRET_KEY}
@@ -73,6 +93,8 @@ services:
       LOG_FILE_ENABLED: "true"
       LOG_DIR: /app/logs
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     depends_on:
       db:
         condition: service_healthy
@@ -95,6 +117,11 @@ services:
     build: .
     container_name: flaskblog-worker
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: celery -A celery_worker.celery worker --loglevel=info -Q critical,default
     environment:
       DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
@@ -118,6 +145,11 @@ services:
     build: .
     container_name: flaskblog-worker-critical
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # 只消费 critical 队列，独占处理维护类/关键任务（预热、死信清理），
     # 与 default 队列隔离，保证关键任务不被普通业务任务挤占（优先级隔离）。
     command: celery -A celery_worker.celery worker --loglevel=info -Q critical --concurrency=2
@@ -143,6 +175,11 @@ services:
     build: .
     container_name: flaskblog-beat
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: celery -A celery_worker.celery beat --loglevel=info
     environment:
       DATABASE_URL: mysql+pymysql://root:root@db:3306/flask_blog?charset=utf8mb4
@@ -166,6 +203,11 @@ services:
     build: ./frontend
     container_name: flaskblog-frontend
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - backend
     ports:
@@ -175,6 +217,11 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: flaskblog-prometheus
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
@@ -188,6 +235,11 @@ services:
     image: grafana/grafana:11.1.0
     container_name: flaskblog-grafana
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
@@ -205,6 +257,11 @@ services:
     image: otel/opentelemetry-collector-contrib:0.107.0
     container_name: flaskblog-otel-collector
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: ["--config=/etc/otel/config.yml"]
     volumes:
       - ./monitoring/otel-collector.yml:/etc/otel/config.yml:ro

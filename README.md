@@ -1,5 +1,19 @@
 # RUNOOB 博客（前后端分离版）
 
+> 一个生产级 Flask 博客项目，从 CRUD 脚手架演进到带缓存/异步/限流/可观测/CI/CD 的完整 Web 服务。
+
+**30 秒速览**
+
+| 维度 | 数据 |
+|---|---|
+| 测试 | **223 passed**，覆盖率 **90%+** |
+| 压测 | 列表 **154 QPS** / 详情 **46 QPS**（gunicorn 4 worker + Redis 缓存） |
+| 代码质量 | ruff + mypy + bandit + pip-audit + pre-commit 全门禁 |
+| CI/CD | GitHub Actions：lint → test(3.x 矩阵) → 迁移 → 前端 → E2E → 镜像 → Trivy → 蓝绿部署 |
+| 可观测 | 结构化 JSON 日志 / OpenTelemetry 链路追踪 / Prometheus+Grafana / Sentry |
+| 安全 | JWT+refresh / RBAC / 限流 / CSP / XSS 净化 / GitHub OAuth / 登录锁定 |
+| 架构 | 前后端分离（Flask RESTful API + Vue3），Docker Compose 一键起 11 个服务 |
+
 从菜鸟教程 [Flask 教程](https://www.runoob.com/flask/flask-tutorial.html) 的「博客系统」出发，重构为 **前后端分离** 架构：Flask 提供纯 RESTful API（JWT 认证），前端用 **Vue3 + Vite + Pinia** 重写，数据库采用 **MySQL**。
 
 ## 技术栈

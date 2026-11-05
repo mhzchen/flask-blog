@@ -101,6 +101,13 @@ class Config:
     OTEL_SERVICE_NAME = os.environ.get('OTEL_SERVICE_NAME', 'flask-blog')
     OTEL_SERVICE_VERSION = os.environ.get('OTEL_SERVICE_VERSION', '1.0.0')
 
+    # ---------- Sentry 错误追踪 ----------
+    # 未配置 DSN 则完全跳过（开发/测试不发任何网络请求）；生产填 Sentry 项目 DSN
+    SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+    SENTRY_ENVIRONMENT = os.environ.get('SENTRY_ENVIRONMENT', 'development')
+    SENTRY_RELEASE = os.environ.get('SENTRY_RELEASE', '')
+    SENTRY_TRACES_SAMPLE_RATE = float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', 0.1))
+
 
     # ---------- WebSocket 实时推送（生产化） ----------
     # 多 worker / 多实例广播需配 SOCKETIO_MESSAGE_QUEUE（redis 消息队列），Flask-SocketIO
@@ -175,6 +182,7 @@ class TestingConfig(Config):
     SECURITY_HEADERS_ENABLED = False
     METRICS_ENABLED = False
     OTEL_ENABLED = False
+    SENTRY_DSN = ''
     LOG_FILE_ENABLED = False
     ALERT_WEBHOOK_URL = ''  # 测试不推 webhook
 

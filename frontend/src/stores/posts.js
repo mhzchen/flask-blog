@@ -22,6 +22,9 @@ export const usePostsStore = defineStore('posts', {
       hasNext: false,
       page: Number(saved.page) || 1,
       loading: false,
+      nextCursor: '',
+      hasMore: false,
+      loadingMore: false,
       categories: [],
       tags: [],
       keyword: saved.keyword || '',
@@ -58,6 +61,8 @@ export const usePostsStore = defineStore('posts', {
         this.pages = data.pages
         this.hasPrev = data.has_prev
         this.hasNext = data.has_next
+        this.nextCursor = data.next_cursor
+        this.hasMore = data.has_more
       } finally {
         this.loading = false
         this._persistFilter()
@@ -72,6 +77,26 @@ export const usePostsStore = defineStore('posts', {
     async fetchTags() {
       const { data } = await api.get('/tags')
       this.tags = data.items
+    },
+    /** keyset 游标加载更多：用 next_cursor 追加下一页，避免深分页 offset 性能劣化。 */
+    async loadMore() {
+      if (!this.nextCursor || this.loadingMore) return
+      this.loadingMore = true
+      try {
+        const { data } = await api.get('/posts', {
+          params: {
+            q: this.keyword || undefined,
+            category: this.categorySlug || undefined,
+            tag: this.tagName || undefined,
+            cursor: this.nextCursor,
+          },
+        })
+        this.items = [...this.items, ...data.items]
+        this.nextCursor = data.next_cursor
+        this.hasMore = data.has_more
+      } finally {
+        this.loadingMore = false
+      }
     },
     /** 回到第一页（搜索/切换分类标签时调用）。 */
     resetPage() {

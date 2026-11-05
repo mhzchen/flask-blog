@@ -3,7 +3,7 @@ export default {
     logout: 'Logout', vitals: 'Vitals', theme: 'Toggle dark mode', lang: 'Switch language', postDetail: 'Post' },
   home: { latest: 'Latest Posts', searchPh: 'Search by title or summary…', search: 'Search', all: 'All',
     allTags: 'All tags', resultPrefix: '{total} posts', searchKw: ', searching “{kw}”',
-    noMatch: 'No matching posts found.', prev: '← Prev', next: 'Next →' },
+    noMatch: 'No matching posts found.', prev: '← Prev', next: 'Next →', loadMore: 'Load more', loadingMore: 'Loading…' },
   post: { views: '{n} views', loginToFav: 'Login to favorite posts.', loginToComment: 'Login to comment.',
     liked: 'Liked ♥', like: 'Like ♡', favorited: 'Saved ♥', favorite: 'Save ♡',
     comments: 'Comments ({n})', reply: 'Reply', delete: 'Delete', noComments: 'No comments yet.',

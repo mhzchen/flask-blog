@@ -71,6 +71,18 @@ def cached(key_prefix, timeout=None):
     return deco
 
 
+def delete_exact(key: str) -> None:
+    """精确删除单个缓存 key（写路径局部失效，避免全量前缀 scan 的失效风暴）。"""
+    app = current_app._get_current_object()
+    client = _client(app)
+    if client is None:
+        return
+    try:
+        client.delete(key)
+    except RedisError:
+        pass
+
+
 def invalidate(prefix):
     """删除某前缀下的所有缓存（数据变更时调用，保证读到最新）。"""
     app = current_app._get_current_object()

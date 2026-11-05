@@ -12,7 +12,6 @@ from app import cache
 from app.celery_app import celery
 from app.degradation import degrade
 
-
 _broker_ok_cache = {"ts": 0.0, "ok": True}
 
 

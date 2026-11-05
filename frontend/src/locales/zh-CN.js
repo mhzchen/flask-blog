@@ -3,7 +3,7 @@ export default {
     logout: '登出', vitals: '性能指标', theme: '切换暗色模式', lang: '切换语言', postDetail: '文章详情' },
   home: { latest: '最新文章', searchPh: '搜索文章标题或摘要…', search: '搜索', all: '全部', allTags: '全部标签',
     resultPrefix: '共 {total} 篇文章', searchKw: '，搜索「{kw}」', noMatch: '没有找到匹配的文章。',
-    prev: '← 上一页', next: '下一页 →' },
+    prev: '← 上一页', next: '下一页 →', loadMore: '加载更多', loadingMore: '加载中…' },
   post: { views: '{n} 阅读', loginToFav: '登录后即可收藏文章。', loginToComment: '登录后即可发表评论。',
     liked: '已赞 ♥', like: '点赞 ♡', favorited: '已收藏 ♥', favorite: '收藏 ♡',
     comments: '评论 ({n})', reply: '回复', delete: '删除', noComments: '还没有评论，来抢沙发~',
